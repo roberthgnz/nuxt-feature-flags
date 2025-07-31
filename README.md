@@ -1,17 +1,13 @@
-# Nuxt Feature Flags 🚩
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
+![getimg_ai_img-l610JcOrfVMwDc6q6PSCr](https://github.com/user-attachments/assets/c57c1175-a660-46d9-ab67-e9842f8d86a6)
 
 [![npm version][npm-version-src]][npm-version-href]
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
 
-A powerful, type-safe feature flag module for Nuxt 3 that enables both static and dynamic feature flag evaluation with server-side support. Perfect for A/B testing, gradual rollouts, and feature management with built-in variant support.
+# Nuxt Feature Flags 🚩
 
-> [!WARNING]
-> This project is just getting started, so things are gonna change a lot. Updates will roll out often, and we're totally open to feedback—hit us up with your thoughts!
+A powerful, type-safe feature flag module for Nuxt 3 that enables both static and dynamic feature flag evaluation with server-side support. Perfect for A/B testing, gradual rollouts, and feature management with built-in variant support.
 
 ## ✨ Features
 
