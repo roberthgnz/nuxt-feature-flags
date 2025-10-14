@@ -207,13 +207,15 @@ const errors = await validateFeatureFlags({
 
 For detailed documentation, visit [nuxt-feature-flags-docs.vercel.app](https://nuxt-feature-flags-docs.vercel.app)
 
-- [Installation Guide](https://nuxt-feature-flags-docs.vercel.app/installation)
-- [Configuration](https://nuxt-feature-flags-docs.vercel.app/configuration)
-- [API Reference](https://nuxt-feature-flags-docs.vercel.app/api)
-- [A/B Testing](https://nuxt-feature-flags-docs.vercel.app/ab-testing)
-- [Context-Aware Flags](https://nuxt-feature-flags-docs.vercel.app/context)
-- [Validation](https://nuxt-feature-flags-docs.vercel.app/validation)
-- [Examples](https://nuxt-feature-flags-docs.vercel.app/examples)
+- [Getting Started](https://nuxt-feature-flags-docs.vercel.app/guide/)
+- [Features](https://nuxt-feature-flags-docs.vercel.app/guide/features)
+- [Context-Aware Flags](https://nuxt-feature-flags-docs.vercel.app/guide/context)
+- [Variants & A/B Testing](https://nuxt-feature-flags-docs.vercel.app/guide/variants)
+- [API Reference](https://nuxt-feature-flags-docs.vercel.app/guide/api)
+- [Module Options](https://nuxt-feature-flags-docs.vercel.app/config/)
+- [Validation & Build Checks](https://nuxt-feature-flags-docs.vercel.app/guide/validation)
+- [Best Practices](https://nuxt-feature-flags-docs.vercel.app/guide/best-practices)
+- [Troubleshooting](https://nuxt-feature-flags-docs.vercel.app/guide/troubleshooting)
 
 ## 🤝 Contributing
 
