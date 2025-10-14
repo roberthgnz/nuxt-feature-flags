@@ -205,15 +205,15 @@ const errors = await validateFeatureFlags({
 
 ## 📚 Documentation
 
-For detailed documentation, visit [your-docs-site.com](https://your-docs-site.com)
+For detailed documentation, visit [nuxt-feature-flags-docs.vercel.app](https://nuxt-feature-flags-docs.vercel.app)
 
-- [Installation Guide](https://your-docs-site.com/installation)
-- [Configuration](https://your-docs-site.com/configuration)
-- [API Reference](https://your-docs-site.com/api)
-- [A/B Testing](https://your-docs-site.com/ab-testing)
-- [Context-Aware Flags](https://your-docs-site.com/context)
-- [Validation](https://your-docs-site.com/validation)
-- [Examples](https://your-docs-site.com/examples)
+- [Installation Guide](https://nuxt-feature-flags-docs.vercel.app/installation)
+- [Configuration](https://nuxt-feature-flags-docs.vercel.app/configuration)
+- [API Reference](https://nuxt-feature-flags-docs.vercel.app/api)
+- [A/B Testing](https://nuxt-feature-flags-docs.vercel.app/ab-testing)
+- [Context-Aware Flags](https://nuxt-feature-flags-docs.vercel.app/context)
+- [Validation](https://nuxt-feature-flags-docs.vercel.app/validation)
+- [Examples](https://nuxt-feature-flags-docs.vercel.app/examples)
 
 ## 🤝 Contributing
 
