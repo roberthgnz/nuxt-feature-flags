@@ -1,6 +1,6 @@
 {
   "name": "nuxt-feature-flags",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Feature flags for Nuxt with A/B testing and variant support",
   "keywords": [
     "nuxt",

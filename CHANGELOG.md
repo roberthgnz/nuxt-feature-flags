@@ -1,6 +1,20 @@
 # Changelog
 
 
+## v1.1.5
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.4...v1.1.5)
+
+### 📖 Documentation
+
+- Significantly reduce README size by moving detailed documentation to docs site ([#](https://github.com/rxb3rth/nuxt-feature-flags/commit/#))
+- Keep only essential quick start and API reference in README
+- Reduce package size by ~10KB
+
+### ❤️ Contributors
+
+- Rxb3rth <reliutg@gmail.com>
+
 ## v1.1.4
 
 [compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.3...v1.1.4)
