@@ -1,6 +1,18 @@
 # Changelog
 
 
+## v1.1.6
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.5...v1.1.6)
+
+### 📖 Documentation
+
+- Fix documentation links to use actual paths from docs site ([#](https://github.com/rxb3rth/nuxt-feature-flags/commit/#))
+
+### ❤️ Contributors
+
+- Rxb3rth <reliutg@gmail.com>
+
 ## v1.1.5
 
 [compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.4...v1.1.5)
