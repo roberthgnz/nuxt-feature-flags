@@ -1,6 +1,29 @@
 # Changelog
 
 
+## v1.1.7
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.6...v1.1.7)
+
+### 🩹 Fixes
+
+- **config-file-runtime-loading**: Resolve critical bug where feature flags from config files were not available at runtime ([58a7469](https://github.com/rxb3rth/nuxt-feature-flags/commit/58a7469))
+  - Fix runtime config structure to properly nest flags under `runtimeConfig.public.featureFlags.flags`
+  - Add HMR support for config file changes in development mode
+  - Improve error handling and logging for config file loading
+  - Add comprehensive property-based tests for all correctness properties
+  - Ensure backward compatibility with inline flag configurations
+
+### 🧪 Tests
+
+- Add 10 comprehensive property-based tests using fast-check
+- Add integration tests for config file loading
+- All 255 tests passing with 9 correctness properties validated
+
+### ❤️ Contributors
+
+- Rxb3rth <reliutg@gmail.com>
+
 ## v1.1.6
 
 [compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.5...v1.1.6)
