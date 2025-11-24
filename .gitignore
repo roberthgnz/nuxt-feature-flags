@@ -24,6 +24,9 @@ dist
 .build-*
 .netlify
 
+# Kiro
+.kiro
+
 # Env
 .env
 
