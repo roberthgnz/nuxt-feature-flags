@@ -284,6 +284,10 @@ const errors = await validateFeatureFlags({
 })
 ```
 
+## 🧪 Testing
+
+The test suite for this module is currently experiencing issues with mocking the Nuxt environment. While the core functionality has been manually tested and verified, the automated tests are not passing. Contributions to fix the test suite are welcome.
+
 ## 📚 Documentation
 
 For detailed documentation, visit [nuxt-feature-flags-docs.vercel.app](https://nuxt-feature-flags-docs.vercel.app)
