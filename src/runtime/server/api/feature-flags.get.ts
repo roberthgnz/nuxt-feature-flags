@@ -1,6 +1,7 @@
 import { eventHandler } from 'h3'
-import { getFeatureFlags } from '../utils/feature-flags'
+import { resolveFeatureFlags } from '../utils/feature-flags'
 
 export default eventHandler(async (event) => {
-  return getFeatureFlags(event)
+  const flags = await resolveFeatureFlags(event)
+  return flags
 })

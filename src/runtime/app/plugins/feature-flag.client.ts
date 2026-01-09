@@ -1,32 +1,22 @@
-import { defineNuxtPlugin } from 'nuxt/app'
-import { useFeatureFlags } from '#imports'
+import { defineNuxtPlugin, useState, useFetch } from '#imports'
+import { vFeature } from '../directives/feature'
 
-export default defineNuxtPlugin({
-  name: 'feature-flags-directive-client',
-  setup(nuxtApp) {
-    const { isEnabled } = useFeatureFlags()
+export default defineNuxtPlugin(async (nuxtApp) => {
+  const flags = useState('feature-flags', () => ({}))
 
-    // v-feature directive for conditional rendering (client-side only)
-    nuxtApp.vueApp.directive('feature', {
-      beforeMount(el: HTMLElement, binding) {
-        const flagName = binding.value
-        const shouldShow = isEnabled(flagName)
+  // Fetch flags from the server endpoint
+  // This ensures the client has the latest flags
+  const { data } = await useFetch('/api/_feature-flags/feature-flags', {
+    key: 'feature-flags',
+    server: false, // We already have the flags on the server
+    default: () => flags.value,
+  })
 
-        if (!shouldShow) {
-          el.style.display = 'none'
-        }
-      },
-      updated(el: HTMLElement, binding) {
-        const flagName = binding.value
-        const shouldShow = isEnabled(flagName)
+  // Update the state with the fetched flags
+  if (data.value) {
+    flags.value = data.value
+  }
 
-        if (!shouldShow) {
-          el.style.display = 'none'
-        }
-        else {
-          el.style.display = ''
-        }
-      },
-    })
-  },
+  nuxtApp.provide('featureFlags', flags.value)
+  nuxtApp.vueApp.directive('feature', vFeature)
 })
