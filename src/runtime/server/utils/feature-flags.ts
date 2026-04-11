@@ -123,35 +123,30 @@ async function loadFlags(): Promise<Record<string, unknown>> {
  */
 function getProductionFlags(runtimeConfig: any): Record<string, unknown> {
   // Primary path: flags should be at runtimeConfig.public.featureFlags.flags (new structure)
-  let flags: Record<string, unknown> = runtimeConfig.public?.featureFlags?.flags as Record<string, unknown> | undefined || {}
+  const flags = runtimeConfig.public?.featureFlags?.flags as Record<string, unknown> | undefined
+  if (flags && typeof flags === 'object' && Object.keys(flags).length > 0) {
+    return flags
+  }
 
   // Fallback 1: Check alternative path for backward compatibility
-  if (!flags || typeof flags !== 'object' || Object.keys(flags).length === 0) {
-    flags = runtimeConfig.featureFlags?.flags as Record<string, unknown> | undefined || {}
+  const fallbackFlags = runtimeConfig.featureFlags?.flags as Record<string, unknown> | undefined
+  if (fallbackFlags && typeof fallbackFlags === 'object' && Object.keys(fallbackFlags).length > 0) {
+    return fallbackFlags
   }
 
   // Fallback 2: For backward compatibility with inline config
-  if (!flags || typeof flags !== 'object' || Object.keys(flags).length === 0) {
-    const featureFlagsConfig = runtimeConfig.public?.featureFlags || runtimeConfig.featureFlags
+  const featureFlagsConfig = runtimeConfig.public?.featureFlags || runtimeConfig.featureFlags
+  if (featureFlagsConfig && typeof featureFlagsConfig === 'object') {
+    const possibleFlags = { ...featureFlagsConfig } as Record<string, unknown>
+    delete possibleFlags.flags
+    delete possibleFlags.config
 
-    if (featureFlagsConfig && typeof featureFlagsConfig === 'object') {
-      const possibleFlags = { ...featureFlagsConfig } as Record<string, unknown>
-      delete possibleFlags.flags
-      delete possibleFlags.config
-
-      if (Object.keys(possibleFlags).length > 0) {
-        flags = possibleFlags
-      }
-      else {
-        flags = {}
-      }
-    }
-    else {
-      flags = {}
+    if (Object.keys(possibleFlags).length > 0) {
+      return possibleFlags
     }
   }
 
-  return flags
+  return {}
 }
 
 /**
