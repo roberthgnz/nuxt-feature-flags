@@ -12,7 +12,7 @@ export interface FlagVariant {
   name?: string
   value: FlagValue
   weight?: number
-  meta?: Record<string, any>
+  meta?: Record<string, unknown>
 }
 
 // Configuration for a single feature flag with variants

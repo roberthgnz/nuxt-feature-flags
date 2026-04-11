@@ -24,10 +24,17 @@ export function setupMocks() {
         },
       }
     }),
-    useFetch: vi.fn().mockResolvedValue({
+    useFetch: vi.fn().mockReturnValue({
       data: { value: {} },
       pending: { value: false },
       error: { value: null },
+      refresh: vi.fn().mockResolvedValue(undefined),
+    }),
+    useFeatureFlags: vi.fn().mockReturnValue({
+      flags: {},
+      isEnabled: () => false,
+      getValue: () => undefined,
+      getVariant: () => undefined,
     }),
     defineNuxtPlugin: vi.fn(fn => fn),
   }))

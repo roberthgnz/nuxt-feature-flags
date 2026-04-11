@@ -80,9 +80,9 @@ export default defineNuxtModule<FeatureFlagsConfig>({
         if (!configFile || !existsSync(configFile)) {
           const attemptedPath = configFile || resolvedConfigPath
           logger.error(
-            `[module-setup] Failed to load config file at '${attemptedPath}': File not found. ` +
-            `Ensure the path is correct and relative to the project root (${nuxt.options.rootDir}). ` +
-            `Attempted to resolve '${options.config}' to '${attemptedPath}'.`
+            `[module-setup] Failed to load config file at '${attemptedPath}': File not found. `
+            + `Ensure the path is correct and relative to the project root (${nuxt.options.rootDir}). `
+            + `Attempted to resolve '${options.config}' to '${attemptedPath}'.`,
           )
           return null
         }
@@ -92,8 +92,8 @@ export default defineNuxtModule<FeatureFlagsConfig>({
         // Validate config structure
         if (configFlags === undefined || configFlags === null) {
           logger.error(
-            `[module-setup] Failed to load config file at '${configFile}': ` +
-            `Config file did not export a valid configuration. Ensure the file exports flag definitions.`
+            `[module-setup] Failed to load config file at '${configFile}': `
+            + `Config file did not export a valid configuration. Ensure the file exports flag definitions.`,
           )
           return null
         }
@@ -116,8 +116,8 @@ export default defineNuxtModule<FeatureFlagsConfig>({
         // Validate that resolved flags is an object
         if (typeof resolvedFlags !== 'object' || resolvedFlags === null || Array.isArray(resolvedFlags)) {
           logger.error(
-            `[module-setup] Failed to load config file at '${configFile}': ` +
-            `Invalid config structure. Expected an object with flag definitions, got ${typeof resolvedFlags}.`
+            `[module-setup] Failed to load config file at '${configFile}': `
+            + `Invalid config structure. Expected an object with flag definitions, got ${typeof resolvedFlags}.`,
           )
           return null
         }
@@ -134,25 +134,25 @@ export default defineNuxtModule<FeatureFlagsConfig>({
         // Provide specific error messages based on error type
         if (errorMessage.includes('ENOENT') || errorMessage.includes('not found')) {
           logger.error(
-            `[module-setup] Failed to load config file${pathInfo}: File not found. ` +
-            `Ensure the path is correct and relative to the project root.`
+            `[module-setup] Failed to load config file${pathInfo}: File not found. `
+            + `Ensure the path is correct and relative to the project root.`,
           )
         }
         else if (errorMessage.includes('EACCES') || errorMessage.includes('permission')) {
           logger.error(
-            `[module-setup] Failed to load config file${pathInfo}: Permission denied. ` +
-            `Check file permissions.`
+            `[module-setup] Failed to load config file${pathInfo}: Permission denied. `
+            + `Check file permissions.`,
           )
         }
         else if (errorMessage.includes('SyntaxError') || errorMessage.includes('parse')) {
           logger.error(
-            `[module-setup] Failed to load config file${pathInfo}: Syntax error in config file. ` +
-            `${errorMessage}`
+            `[module-setup] Failed to load config file${pathInfo}: Syntax error in config file. `
+            + `${errorMessage}`,
           )
         }
         else {
           logger.error(
-            `[module-setup] Failed to load config file${pathInfo}: ${errorMessage}`
+            `[module-setup] Failed to load config file${pathInfo}: ${errorMessage}`,
           )
         }
 
@@ -186,7 +186,7 @@ export default defineNuxtModule<FeatureFlagsConfig>({
             // Clear module cache to force re-evaluation
             if (require.cache[configPath]) {
               logDebug(`[HMR] Clearing module cache for: ${configPath}`)
-              delete require.cache[configPath]
+              Reflect.deleteProperty(require.cache, configPath)
             }
 
             // Reload the config
@@ -216,8 +216,8 @@ export default defineNuxtModule<FeatureFlagsConfig>({
             }
             else {
               logger.warn(
-                `[HMR] Failed to reload config file at '${path}'. ` +
-                `Keeping previous flag configuration. Check the error messages above for details.`
+                `[HMR] Failed to reload config file at '${path}'. `
+                + `Keeping previous flag configuration. Check the error messages above for details.`,
               )
             }
           }
@@ -232,8 +232,8 @@ export default defineNuxtModule<FeatureFlagsConfig>({
     }
     else {
       logger.warn(
-        `[module-setup] No feature flags configured. ` +
-        `Provide flags either inline in nuxt.config.ts or via a config file.`
+        `[module-setup] No feature flags configured. `
+        + `Provide flags either inline in nuxt.config.ts or via a config file.`,
       )
     }
 

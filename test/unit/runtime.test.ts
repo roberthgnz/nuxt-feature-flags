@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { setupMocks } from '../utils'
 import { useAsyncFeatureFlags } from '~/src/runtime/app/composables/use-async-feature-flags'
 import { getFeatureFlags } from '~/src/runtime/server/utils/feature-flags'
 import { vFeature } from '~/src/runtime/app/directives/feature'
 import { useFetch, useRuntimeConfig, useFeatureFlags } from '#imports'
-import { setupMocks } from '../utils'
 
 describe('Runtime Functionality', () => {
   beforeEach(() => {
@@ -11,14 +11,17 @@ describe('Runtime Functionality', () => {
   })
 
   describe('useAsyncFeatureFlags', () => {
-    it('should fetch and return feature flags', async () => {
+    it('should fetch and return feature flags', () => {
       const mockFlags = { 'new-feature': { enabled: true, value: true } }
-      useFetch.mockResolvedValueOnce({ data: { value: mockFlags } })
+      useFetch.mockReturnValueOnce({
+        data: { value: mockFlags },
+        pending: { value: false },
+        error: { value: null },
+        refresh: vi.fn().mockResolvedValue(undefined),
+      })
 
       const { flags, pending, error } = useAsyncFeatureFlags()
 
-      expect(pending.value).toBe(true)
-      await new Promise(resolve => setTimeout(resolve, 0)) // Wait for next tick
       expect(pending.value).toBe(false)
       expect(error.value).toBe(null)
       expect(flags.value).toEqual(mockFlags)

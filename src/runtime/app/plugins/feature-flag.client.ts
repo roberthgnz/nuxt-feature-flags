@@ -1,5 +1,5 @@
-import { defineNuxtPlugin, useState, useFetch } from '#imports'
 import { vFeature } from '../directives/feature'
+import { defineNuxtPlugin, useState, useFetch } from '#imports'
 
 export default defineNuxtPlugin(async (nuxtApp) => {
   const flags = useState('feature-flags', () => ({}))

@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useFeatureFlags } from '~/src/runtime/app/composables/feature-flags'
-import { setupMocks } from '../utils'
 import { useNuxtApp } from '#imports'
 
 describe('useFeatureFlags composable', () => {
   beforeEach(() => {
-    setupMocks()
     useNuxtApp.mockReturnValue({
       $featureFlags: {
         simpleFlag: { enabled: true, value: true },

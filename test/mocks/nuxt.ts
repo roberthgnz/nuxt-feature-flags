@@ -25,10 +25,18 @@ export const useState = vi.fn((_, init) => {
   }
 })
 
-export const useFetch = vi.fn().mockResolvedValue({
+export const useFetch = vi.fn().mockReturnValue({
   data: { value: {} },
   pending: { value: false },
   error: { value: null },
+  refresh: vi.fn().mockResolvedValue(undefined),
+})
+
+export const useFeatureFlags = vi.fn().mockReturnValue({
+  flags: {},
+  isEnabled: () => false,
+  getValue: () => undefined,
+  getVariant: () => undefined,
 })
 
 export const defineNuxtPlugin = vi.fn(fn => fn)

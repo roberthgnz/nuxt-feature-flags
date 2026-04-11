@@ -1,22 +1,77 @@
-import { H3Event, getCookie } from 'h3'
+import { getCookie } from 'h3'
+import type { H3Event } from 'h3'
 import { defu } from 'defu'
-import { useRuntimeConfig } from '#imports'
 import { logger, logDebug } from '../../../utils/logger'
-import type { FlagsSchema, FlagValue, ResolvedFlag, ResolvedFlags, FlagVariant } from '../../../types'
+import type { FlagsSchema, FlagValue, FlagVariant, ResolvedFlags } from '../../../types'
 import { DEFAULTS } from '../../../defaults'
+import type { VariantContext } from '../../../types/feature-flags'
+import { getVariantForFlag } from './variant-assignment'
+import { useRuntimeConfig } from '#imports'
 
 // Define a cache for feature flags to avoid repeated lookups
 let flagCache: ResolvedFlags | null = null
 let cacheTimestamp = 0
 
+function safeGetCookie(event: H3Event | undefined, name: string): string | undefined {
+  if (!event?.node?.req) {
+    return undefined
+  }
+
+  try {
+    return getCookie(event, name) || undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+function getRuntimeFlags(runtimeConfig: ReturnType<typeof useRuntimeConfig>): FlagsSchema {
+  const primaryFlags = runtimeConfig.public?.featureFlags?.flags as FlagsSchema | undefined
+  if (primaryFlags && typeof primaryFlags === 'object') {
+    return primaryFlags
+  }
+
+  const fallbackFlags = (runtimeConfig as { featureFlags?: { flags?: FlagsSchema } }).featureFlags?.flags
+  if (fallbackFlags && typeof fallbackFlags === 'object') {
+    return fallbackFlags
+  }
+
+  const inlineConfig = runtimeConfig.public?.featureFlags
+    || (runtimeConfig as { featureFlags?: Record<string, unknown> }).featureFlags
+  if (inlineConfig && typeof inlineConfig === 'object') {
+    const { flags: _flags, config: _config, ...possibleFlags } = inlineConfig as Record<string, unknown>
+    return possibleFlags as FlagsSchema
+  }
+
+  return {}
+}
+
+function getVariantContext(event: H3Event | undefined): VariantContext {
+  const userId = event?.context?.user?.id || event?.context?.userId
+  const sessionId = safeGetCookie(event, 'session_id')
+    || safeGetCookie(event, 'session-id')
+    || safeGetCookie(event, 'nuxt-session')
+
+  const forwardedHeader = event?.node?.req?.headers?.['x-forwarded-for']
+  const forwarded = Array.isArray(forwardedHeader) ? forwardedHeader[0] : forwardedHeader
+  const ipAddress = forwarded?.split(',')[0]?.trim() || event?.node?.req?.socket?.remoteAddress
+
+  return {
+    userId,
+    sessionId,
+    ipAddress,
+  }
+}
+
 // Function to resolve feature flags from the configuration
 export async function resolveFeatureFlags(event: H3Event): Promise<ResolvedFlags> {
   const now = Date.now()
-  const { featureFlags } = useRuntimeConfig().public
+  const runtimeConfig = useRuntimeConfig()
+  const { featureFlags } = runtimeConfig.public
   const cacheTTL = featureFlags.cacheTTL ?? DEFAULTS.CACHE_TTL
 
   // In dev mode, check if the cache is older than 1 second
-  if (process.dev) {
+  if (import.meta.dev) {
     if (flagCache && now - cacheTimestamp < cacheTTL) {
       logDebug('[server-cache] Using cached feature flags (dev mode, < 1s old)')
       return flagCache
@@ -32,25 +87,28 @@ export async function resolveFeatureFlags(event: H3Event): Promise<ResolvedFlags
 
   try {
     // Dynamically import the feature flags config
-    const { default: config } = await import('#feature-flags/config')
+    let configFlags: FlagsSchema = {}
 
-    let flags: FlagsSchema = {}
+    try {
+      const { default: config } = await import('#feature-flags/config')
 
-    // If the config is a function, evaluate it with the request context
-    if (typeof config === 'function') {
-      logDebug('Evaluating feature flags config function with H3Event context')
-      flags = await Promise.resolve(config(event.context))
+      // If the config is a function, evaluate it with the request context
+      if (typeof config === 'function') {
+        logDebug('Evaluating feature flags config function with H3Event context')
+        configFlags = await Promise.resolve(config(event.context))
+      }
+      else if (config && typeof config === 'object') {
+        logDebug('Using feature flags config object')
+        configFlags = config as FlagsSchema
+      }
     }
-    else {
-      logDebug('Using feature flags config object')
-      flags = config
+    catch (error) {
+      logDebug('Could not import #feature-flags/config, falling back to runtime flags only', error)
     }
 
     // Merge with inline flags if any
-    const inlineFlags = useRuntimeConfig().public.featureFlags.flags
-    if (inlineFlags) {
-      flags = defu(flags, inlineFlags)
-    }
+    const inlineFlags = getRuntimeFlags(runtimeConfig)
+    const flags = defu(configFlags, inlineFlags)
 
     // Resolve the flags and store them in the cache
     const resolved = resolveFlags(flags, event)
@@ -69,21 +127,38 @@ export async function resolveFeatureFlags(event: H3Event): Promise<ResolvedFlags
 
 // Helper function to resolve the final state of flags
 function resolveFlags(flags: FlagsSchema, event: H3Event): ResolvedFlags {
+  const context = getVariantContext(event)
   const resolved: ResolvedFlags = {}
+
   for (const key in flags) {
     const flag = flags[key]
-    if (typeof flag === 'object' && flag !== null && 'value' in flag) {
-      const { value, variants } = flag
-      let resolvedVariant: FlagVariant | undefined
 
-      if (variants && variants.length > 0) {
-        resolvedVariant = resolveVariant(key, variants, event)
+    if (typeof flag === 'object' && flag !== null && !Array.isArray(flag)) {
+      const featureFlag = flag as {
+        enabled?: boolean
+        value?: FlagValue
+        variants?: FlagVariant[]
+      }
+      const baseEnabled = 'enabled' in featureFlag ? !!featureFlag.enabled : !!featureFlag.value
+
+      if (!baseEnabled) {
+        resolved[key] = {
+          enabled: false,
+          value: featureFlag.value,
+          variant: undefined,
+        }
+        continue
       }
 
+      const variants = featureFlag.variants
+      const assignedVariant = variants && variants.length
+        ? getVariantForFlag(key, variants as import('../../../types/feature-flags').FlagVariant[], context)
+        : null
+
       resolved[key] = {
-        enabled: !!(resolvedVariant ? resolvedVariant.value : value),
-        value: resolvedVariant ? resolvedVariant.value : value,
-        variant: resolvedVariant?.name,
+        enabled: !!(assignedVariant?.value ?? featureFlag.value ?? baseEnabled),
+        value: (assignedVariant?.value ?? featureFlag.value) as FlagValue,
+        variant: assignedVariant?.name,
       }
     }
     else {
@@ -95,43 +170,6 @@ function resolveFlags(flags: FlagsSchema, event: H3Event): ResolvedFlags {
     }
   }
   return resolved
-}
-
-// Simple string hash function
-function simpleHash(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash |= 0 // Convert to 32bit integer
-  }
-  return Math.abs(hash)
-}
-
-// Helper function to resolve a variant from a list of variants
-function resolveVariant(key: string, variants: FlagVariant[], event: H3Event): FlagVariant | undefined {
-  const userId = event.context.user?.id
-  const sessionId = getCookie(event, 'session_id')
-  const uniqueId = userId || sessionId
-
-  if (!uniqueId) {
-    logger.warn(`No unique identifier found for variant assignment for flag "${key}". Falling back to random assignment.`)
-  }
-
-  const totalWeight = variants.reduce((acc, v) => acc + (v.weight ?? 0), 0)
-  const seed = uniqueId ? `${uniqueId}:${key}` : `${Math.random()}`
-  const hash = simpleHash(seed)
-  let random = hash % totalWeight
-
-  for (const variant of variants) {
-    if (variant.weight === undefined) continue
-    if (random < variant.weight) {
-      return variant
-    }
-    random -= variant.weight
-  }
-
-  return undefined
 }
 
 export async function getFeatureFlags(event: H3Event) {
@@ -155,4 +193,42 @@ export async function getFeatureFlags(event: H3Event) {
     getValue,
     getVariant,
   }
+}
+
+// Backward-compatible synchronous helper used by older tests/consumers.
+export function isFeatureEnabled(flagName: string, expectedVariant?: string): boolean {
+  if (!flagName) {
+    return false
+  }
+
+  const runtimeFlags = getRuntimeFlags(useRuntimeConfig())
+  const flag = runtimeFlags[flagName]
+
+  if (flag === null || flag === undefined) {
+    return false
+  }
+
+  if (Array.isArray(flag)) {
+    return flag.length > 0
+  }
+
+  if (typeof flag === 'object') {
+    const featureFlag = flag as {
+      enabled?: boolean
+      value?: FlagValue
+      variants?: Array<{ name?: string }>
+    }
+    const enabled = 'enabled' in featureFlag ? !!featureFlag.enabled : !!featureFlag.value
+    if (!enabled) {
+      return false
+    }
+
+    if (expectedVariant && Array.isArray(featureFlag.variants)) {
+      return featureFlag.variants.some(variant => variant?.name === expectedVariant)
+    }
+
+    return enabled
+  }
+
+  return !!flag
 }

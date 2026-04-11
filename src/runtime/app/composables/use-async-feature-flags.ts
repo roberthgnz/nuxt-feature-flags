@@ -1,7 +1,15 @@
+import type { Ref } from 'vue'
 import { useNuxtApp, useFetch, useState } from '#imports'
 import type { ResolvedFlags } from '#feature-flags/types'
 
-export const useAsyncFeatureFlags = () => {
+export interface UseAsyncFeatureFlagsResult {
+  flags: Ref<ResolvedFlags>
+  pending: Ref<boolean>
+  error: Ref<unknown>
+  refresh: () => Promise<void>
+}
+
+export const useAsyncFeatureFlags = (): UseAsyncFeatureFlagsResult => {
   const { $featureFlags } = useNuxtApp()
   const flags = useState<ResolvedFlags>('feature-flags', () => $featureFlags)
 
@@ -17,8 +25,8 @@ export const useAsyncFeatureFlags = () => {
 
   return {
     flags,
-    pending,
-    error,
-    refresh,
+    pending: pending as Ref<boolean>,
+    error: error as Ref<unknown>,
+    refresh: refresh as () => Promise<void>,
   }
 }
