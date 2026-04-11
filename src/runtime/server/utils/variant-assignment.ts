@@ -46,7 +46,7 @@ export function normalizeWeights(variants: FlagVariant[]): NormalizedVariant[] {
 export function generateVariantHash(flagName: string, context: VariantContext): number {
   const identifier = context.userId || context.sessionId || context.ipAddress || 'anonymous'
   const input = `${flagName}:${identifier}`
-  const hash = createHash('md5').update(input).digest('hex')
+  const hash = createHash('sha256').update(input).digest('hex')
 
   // Convert first 8 characters of hex to number and normalize to 0-100
   const hashInt = Number.parseInt(hash.substring(0, 8), 16)
