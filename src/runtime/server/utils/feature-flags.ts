@@ -1,38 +1,60 @@
-import type { H3Event } from 'h3'
 import { getCookie } from 'h3'
-import type { FlagConfig, FlagValue, VariantContext } from '../../../types/feature-flags'
-import type { FlagDefinition } from '../../../types'
+import type { H3Event } from 'h3'
+import { defu } from 'defu'
+import { logger, logDebug } from '../../../utils/logger'
+import type { FlagsSchema, FlagValue, FlagVariant, ResolvedFlags } from '../../../types'
+import { DEFAULTS } from '../../../defaults'
+import type { VariantContext } from '../../../types/feature-flags'
 import { getVariantForFlag } from './variant-assignment'
 import { useRuntimeConfig } from '#imports'
 
-// Cache for development mode to avoid excessive file reads
-// This is cleared on HMR updates
-let devModeCache: { flags: Record<string, unknown>, timestamp: number } | null = null
-const DEV_CACHE_TTL = 1000 // 1 second TTL for dev mode cache
+// Define a cache for feature flags to avoid repeated lookups
+let flagCache: ResolvedFlags | null = null
+let cacheTimestamp = 0
 
-export interface ResolvedFlag {
-  enabled: boolean
-  value?: FlagValue
-  variant?: string
+function safeGetCookie(event: H3Event | undefined, name: string): string | undefined {
+  if (!event?.node?.req) {
+    return undefined
+  }
+
+  try {
+    return getCookie(event, name) || undefined
+  }
+  catch {
+    return undefined
+  }
 }
 
-export interface ResolvedFlags {
-  [key: string]: ResolvedFlag
+function getRuntimeFlags(runtimeConfig: ReturnType<typeof useRuntimeConfig>): FlagsSchema {
+  const primaryFlags = runtimeConfig.public?.featureFlags?.flags as FlagsSchema | undefined
+  if (primaryFlags && typeof primaryFlags === 'object') {
+    return primaryFlags
+  }
+
+  const fallbackFlags = (runtimeConfig as { featureFlags?: { flags?: FlagsSchema } }).featureFlags?.flags
+  if (fallbackFlags && typeof fallbackFlags === 'object') {
+    return fallbackFlags
+  }
+
+  const inlineConfig = runtimeConfig.public?.featureFlags
+    || (runtimeConfig as { featureFlags?: Record<string, unknown> }).featureFlags
+  if (inlineConfig && typeof inlineConfig === 'object') {
+    const { flags: _flags, config: _config, ...possibleFlags } = inlineConfig as Record<string, unknown>
+    return possibleFlags as FlagsSchema
+  }
+
+  return {}
 }
 
-/**
- * Extract context for variant assignment
- */
-function getVariantContext(event: H3Event): VariantContext {
-  // Try to get user ID from context (could be set by auth middleware)
-  const userId = event.context.user?.id || event.context.userId
+function getVariantContext(event: H3Event | undefined): VariantContext {
+  const userId = event?.context?.user?.id || event?.context?.userId
+  const sessionId = safeGetCookie(event, 'session_id')
+    || safeGetCookie(event, 'session-id')
+    || safeGetCookie(event, 'nuxt-session')
 
-  // Try to get session ID from cookie
-  const sessionId = getCookie(event, 'session-id') || getCookie(event, 'nuxt-session')
-
-  // Get IP address as fallback (use headers as h3 doesn't export getClientIP in all versions)
-  const forwarded = event.node.req.headers['x-forwarded-for']
-  const ipAddress = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0] || event.node.req.socket.remoteAddress
+  const forwardedHeader = event?.node?.req?.headers?.['x-forwarded-for']
+  const forwarded = Array.isArray(forwardedHeader) ? forwardedHeader[0] : forwardedHeader
+  const ipAddress = forwarded?.split(',')[0]?.trim() || event?.node?.req?.socket?.remoteAddress
 
   return {
     userId,
@@ -41,288 +63,172 @@ function getVariantContext(event: H3Event): VariantContext {
   }
 }
 
-/**
- * Resolve a flag value considering variants
- */
-function resolveFlagValue(
-  flagName: string,
-  flagValue: unknown,
-  context: VariantContext,
-): ResolvedFlag {
-  // Simple boolean/value flag
-  if (typeof flagValue !== 'object' || flagValue === null || Array.isArray(flagValue)) {
-    let enabled: boolean
-    if (Array.isArray(flagValue)) {
-      enabled = flagValue.length > 0
-    }
-    else {
-      enabled = !!(flagValue as FlagValue)
-    }
-    return {
-      enabled,
-      value: flagValue as FlagValue,
-    }
-  }
-
-  const flagConfig = flagValue as FlagConfig
-
-  // If flag is disabled, return early
-  if (!flagConfig.enabled) {
-    return {
-      enabled: false,
-      value: flagConfig.value,
-    }
-  }
-
-  // Handle variants
-  if (flagConfig.variants && flagConfig.variants.length > 0) {
-    try {
-      const assignedVariant = getVariantForFlag(flagName, flagConfig.variants, context)
-
-      if (assignedVariant) {
-        return {
-          enabled: true,
-          value: assignedVariant.value !== undefined ? assignedVariant.value : flagConfig.value,
-          variant: assignedVariant.name,
-        }
-      }
-    }
-    catch (error) {
-      // If variant assignment fails, fall back to default behavior
-      console.warn(`Variant assignment failed for flag ${flagName}:`, error)
-    }
-  }
-
-  // Default case - enabled flag without variants
-  return {
-    enabled: true,
-    value: flagConfig.value,
-  }
-}
-
-/**
- * Load flags with appropriate strategy based on environment
- * - Development: Per-request loading with short TTL cache
- * - Production: Use build-time flags from runtime config
- */
-async function loadFlags(): Promise<Record<string, unknown>> {
-  const runtimeConfig = useRuntimeConfig()
-  const isDevelopment = process.env.NODE_ENV === 'development' || process.dev
-
-  // In production mode, always use build-time flags from runtime config
-  if (!isDevelopment) {
-    return getProductionFlags(runtimeConfig)
-  }
-
-  // In development mode, implement per-request loading with caching
-  return getDevelopmentFlags(runtimeConfig)
-}
-
-/**
- * Get flags in production mode (build-time loaded, no reloading)
- */
-function getProductionFlags(runtimeConfig: any): Record<string, unknown> {
-  // Primary path: flags should be at runtimeConfig.public.featureFlags.flags (new structure)
-  let flags: Record<string, unknown> = runtimeConfig.public?.featureFlags?.flags as Record<string, unknown> | undefined || {}
-
-  // Fallback 1: Check alternative path for backward compatibility
-  if (!flags || typeof flags !== 'object' || Object.keys(flags).length === 0) {
-    flags = runtimeConfig.featureFlags?.flags as Record<string, unknown> | undefined || {}
-  }
-
-  // Fallback 2: For backward compatibility with inline config
-  if (!flags || typeof flags !== 'object' || Object.keys(flags).length === 0) {
-    const featureFlagsConfig = runtimeConfig.public?.featureFlags || runtimeConfig.featureFlags
-
-    if (featureFlagsConfig && typeof featureFlagsConfig === 'object') {
-      const possibleFlags = { ...featureFlagsConfig } as Record<string, unknown>
-      delete possibleFlags.flags
-      delete possibleFlags.config
-
-      if (Object.keys(possibleFlags).length > 0) {
-        flags = possibleFlags
-      }
-      else {
-        flags = {}
-      }
-    }
-    else {
-      flags = {}
-    }
-  }
-
-  return flags
-}
-
-/**
- * Get flags in development mode (per-request loading with cache)
- */
-function getDevelopmentFlags(runtimeConfig: any): Record<string, unknown> {
+// Function to resolve feature flags from the configuration
+export async function resolveFeatureFlags(event: H3Event): Promise<ResolvedFlags> {
   const now = Date.now()
-  const isVerbose = process.env.NUXT_FEATURE_FLAGS_VERBOSE === 'true' ||
-    process.env.NUXT_FEATURE_FLAGS_DEBUG === 'true'
-
-  // Check if we have a valid cached version
-  if (devModeCache && (now - devModeCache.timestamp) < DEV_CACHE_TTL) {
-    if (isVerbose) {
-      console.log(`[runtime] [DEBUG] Using cached flags (age: ${now - devModeCache.timestamp}ms)`)
-    }
-    return devModeCache.flags
-  }
-
-  if (isVerbose) {
-    console.log('[runtime] [DEBUG] Cache expired or empty, loading fresh flags from runtime config')
-  }
-
-  // Load fresh flags from runtime config
-  // In development, runtime config is updated by HMR when config file changes
-  const flags = getProductionFlags(runtimeConfig)
-
-  if (isVerbose) {
-    console.log(`[runtime] [DEBUG] Loaded ${Object.keys(flags).length} flags from runtime config`)
-  }
-
-  // Update cache
-  devModeCache = {
-    flags,
-    timestamp: now,
-  }
-
-  return flags
-}
-
-/**
- * Clear the development mode cache
- * This should be called when HMR updates occur
- */
-export function clearDevModeCache() {
-  devModeCache = null
-}
-
-export function getFeatureFlags(event: H3Event) {
-  // Get flags using appropriate loading strategy
   const runtimeConfig = useRuntimeConfig()
-  const isVerbose = process.env.NUXT_FEATURE_FLAGS_VERBOSE === 'true' ||
-    process.env.NUXT_FEATURE_FLAGS_DEBUG === 'true'
+  const { featureFlags } = runtimeConfig.public
+  const cacheTTL = featureFlags.cacheTTL ?? DEFAULTS.CACHE_TTL
 
-  // Load flags based on environment
-  // In development: per-request with cache
-  // In production: build-time flags
-  let flags: Record<string, unknown>
-
-  const isDevelopment = process.env.NODE_ENV === 'development' || process.dev
-
-  if (isVerbose) {
-    console.log(`[runtime] [DEBUG] Loading flags in ${isDevelopment ? 'development' : 'production'} mode`)
-  }
-
-  if (isDevelopment) {
-    flags = getDevelopmentFlags(runtimeConfig)
-  }
-  else {
-    flags = getProductionFlags(runtimeConfig)
-  }
-
-  // Log warning if no flags found
-  if (!flags || typeof flags !== 'object' || Object.keys(flags).length === 0) {
-    if (isDevelopment) {
-      console.warn('[runtime] No feature flags found in runtime config. Ensure flags are properly loaded from config file or defined inline in nuxt.config.ts.')
-    }
-    flags = {}
-  } else if (isVerbose) {
-    console.log(`[runtime] [DEBUG] Retrieved ${Object.keys(flags).length} flags from runtime config`)
-  }
-
-  const context = getVariantContext(event)
-  const resolvedFlags: ResolvedFlags = {}
-
-  // Resolve all flags with variant support
-  for (const [flagName, flagValue] of Object.entries(flags)) {
-    try {
-      resolvedFlags[flagName] = resolveFlagValue(flagName, flagValue, context)
-    }
-    catch (error) {
-      console.error(`[runtime] Failed to resolve flag '${flagName}':`, error instanceof Error ? error.message : String(error))
-      // Provide a safe default
-      resolvedFlags[flagName] = { enabled: false }
+  // In dev mode, check if the cache is older than 1 second
+  if (import.meta.dev) {
+    if (flagCache && now - cacheTimestamp < cacheTTL) {
+      logDebug('[server-cache] Using cached feature flags (dev mode, < 1s old)')
+      return flagCache
     }
   }
-
-  return {
-    flags: resolvedFlags,
-    isEnabled(flagName: string, variant?: string): boolean {
-      const flag = resolvedFlags[flagName]
-      if (!flag) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(`[runtime] Flag '${flagName}' not found in runtime config. Ensure flags are properly loaded from config file or defined inline.`)
-        }
-        return false
-      }
-      if (!flag.enabled) return false
-
-      // If variant is specified, check if it matches
-      if (variant && flag.variant !== variant) return false
-
-      return true
-    },
-    getVariant(flagName: string): string | undefined {
-      const flag = resolvedFlags[flagName]
-      if (!flag && process.env.NODE_ENV === 'development') {
-        console.warn(`[runtime] Flag '${flagName}' not found when getting variant.`)
-      }
-      return flag?.variant
-    },
-    getValue(flagName: string): FlagValue | undefined {
-      const flag = resolvedFlags[flagName]
-      if (!flag && process.env.NODE_ENV === 'development') {
-        console.warn(`[runtime] Flag '${flagName}' not found when getting value.`)
-      }
-      return flag?.value
-    },
-  }
-}
-
-/**
- * Standalone function to check if a feature flag is enabled
- * Useful for simple flag checking without full context
- */
-export function isFeatureEnabled(flagName: string, variant?: string): boolean {
-  const runtimeConfig = useRuntimeConfig()
-
-  // Load flags using appropriate strategy based on environment
-  const isDevelopment = process.env.NODE_ENV === 'development' || process.dev
-  let flags: Record<string, unknown>
-
-  if (isDevelopment) {
-    flags = getDevelopmentFlags(runtimeConfig)
-  }
-  else {
-    flags = getProductionFlags(runtimeConfig)
+  // In production, use the cache if it's available
+  else if (flagCache) {
+    logDebug('[server-cache] Using cached feature flags (production)')
+    return flagCache
   }
 
-  const flagValue = flags[flagName]
-  if (!flagValue) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn(`[runtime] Flag '${flagName}' not found in runtime config. Ensure flags are properly loaded from config file or defined inline.`)
-    }
-    return false
-  }
-
-  // Create basic context for variant assignment (empty since we don't have an event)
-  const context: VariantContext = {}
+  logDebug('Resolving feature flags on the server')
 
   try {
-    const resolvedFlag = resolveFlagValue(flagName, flagValue, context)
+    // Dynamically import the feature flags config
+    let configFlags: FlagsSchema = {}
 
-    if (!resolvedFlag.enabled) return false
+    try {
+      const { default: config } = await import('#feature-flags/config')
 
-    // If variant is specified, check if it matches
-    if (variant && resolvedFlag.variant !== variant) return false
+      // If the config is a function, evaluate it with the request context
+      if (typeof config === 'function') {
+        logDebug('Evaluating feature flags config function with H3Event context')
+        configFlags = await Promise.resolve(config(event.context))
+      }
+      else if (config && typeof config === 'object') {
+        logDebug('Using feature flags config object')
+        configFlags = config as FlagsSchema
+      }
+    }
+    catch (error) {
+      logDebug('Could not import #feature-flags/config, falling back to runtime flags only', error)
+    }
 
-    return true
+    // Merge with inline flags if any
+    const inlineFlags = getRuntimeFlags(runtimeConfig)
+    const flags = defu(configFlags, inlineFlags)
+
+    // Resolve the flags and store them in the cache
+    const resolved = resolveFlags(flags, event)
+    flagCache = resolved
+    cacheTimestamp = now
+
+    logDebug(`Resolved ${Object.keys(resolved).length} feature flags`)
+
+    return resolved
   }
   catch (error) {
-    console.error(`[runtime] Failed to resolve flag '${flagName}':`, error instanceof Error ? error.message : String(error))
+    logger.error('Failed to resolve feature flags:', error)
+    return {}
+  }
+}
+
+// Helper function to resolve the final state of flags
+function resolveFlags(flags: FlagsSchema, event: H3Event): ResolvedFlags {
+  const context = getVariantContext(event)
+  const resolved: ResolvedFlags = {}
+
+  for (const key in flags) {
+    const flag = flags[key]
+
+    if (typeof flag === 'object' && flag !== null && !Array.isArray(flag)) {
+      const featureFlag = flag as {
+        enabled?: boolean
+        value?: FlagValue
+        variants?: FlagVariant[]
+      }
+      const baseEnabled = 'enabled' in featureFlag ? !!featureFlag.enabled : !!featureFlag.value
+
+      if (!baseEnabled) {
+        resolved[key] = {
+          enabled: false,
+          value: featureFlag.value,
+          variant: undefined,
+        }
+        continue
+      }
+
+      const variants = featureFlag.variants
+      const assignedVariant = variants && variants.length
+        ? getVariantForFlag(key, variants as import('../../../types/feature-flags').FlagVariant[], context)
+        : null
+
+      resolved[key] = {
+        enabled: !!(assignedVariant?.value ?? featureFlag.value ?? baseEnabled),
+        value: (assignedVariant?.value ?? featureFlag.value) as FlagValue,
+        variant: assignedVariant?.name,
+      }
+    }
+    else {
+      resolved[key] = {
+        enabled: !!flag,
+        value: flag as FlagValue,
+        variant: undefined,
+      }
+    }
+  }
+  return resolved
+}
+
+export async function getFeatureFlags(event: H3Event) {
+  const flags = await resolveFeatureFlags(event)
+
+  const isEnabled = (flag: string): boolean => {
+    return flags[flag]?.enabled ?? false
+  }
+
+  const getValue = (flag: string): FlagValue => {
+    return flags[flag]?.value
+  }
+
+  const getVariant = (flag: string): string | undefined => {
+    return flags[flag]?.variant
+  }
+
+  return {
+    flags,
+    isEnabled,
+    getValue,
+    getVariant,
+  }
+}
+
+// Backward-compatible synchronous helper used by older tests/consumers.
+export function isFeatureEnabled(flagName: string, expectedVariant?: string): boolean {
+  if (!flagName) {
     return false
   }
+
+  const runtimeFlags = getRuntimeFlags(useRuntimeConfig())
+  const flag = runtimeFlags[flagName]
+
+  if (flag === null || flag === undefined) {
+    return false
+  }
+
+  if (Array.isArray(flag)) {
+    return flag.length > 0
+  }
+
+  if (typeof flag === 'object') {
+    const featureFlag = flag as {
+      enabled?: boolean
+      value?: FlagValue
+      variants?: Array<{ name?: string }>
+    }
+    const enabled = 'enabled' in featureFlag ? !!featureFlag.enabled : !!featureFlag.value
+    if (!enabled) {
+      return false
+    }
+
+    if (expectedVariant && Array.isArray(featureFlag.variants)) {
+      return featureFlag.variants.some(variant => variant?.name === expectedVariant)
+    }
+
+    return enabled
+  }
+
+  return !!flag
 }

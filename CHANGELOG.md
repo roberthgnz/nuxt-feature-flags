@@ -1,77 +1,33 @@
 # Changelog
 
+## v2.0.1 (2026-04-11)
 
-## v1.1.7
+### Fixes
 
-[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.6...v1.1.7)
+- Stabilized runtime flag resolution with safer fallback behavior when config import is unavailable.
+- Added resilient event/cookie handling for server-side variant resolution.
+- Restored backward-compatible `isFeatureEnabled` helper for legacy consumers/tests.
+- Improved async composable typing to avoid declaration-generation issues.
 
-### 🩹 Fixes
+### Quality
 
-- **config-file-runtime-loading**: Resolve critical bug where feature flags from config files were not available at runtime ([58a7469](https://github.com/rxb3rth/nuxt-feature-flags/commit/58a7469))
-  - Fix runtime config structure to properly nest flags under `runtimeConfig.public.featureFlags.flags`
-  - Add HMR support for config file changes in development mode
-  - Improve error handling and logging for config file loading
-  - Add comprehensive property-based tests for all correctness properties
-  - Ensure backward compatibility with inline flag configurations
+- Updated and aligned mocks/tests with v2 runtime behavior.
+- Lint, tests, and module build are passing on branch `v2`.
 
-### 🧪 Tests
+## v2.0.0 (2024-07-26)
 
-- Add 10 comprehensive property-based tests using fast-check
-- Add integration tests for config file loading
-- All 255 tests passing with 9 correctness properties validated
+### Features
 
-### ❤️ Contributors
+- Runtime flag evaluation on the server, allowing dynamic sources (for example, KV/remote services).
+- Asynchronous configuration support in `defineFeatureFlags`.
+- New `useAsyncFeatureFlags` composable with `pending` and `error` states.
 
-- Rxb3rth <reliutg@gmail.com>
+### Breaking Changes
 
-## v1.1.6
+- `getFeatureFlags` became asynchronous and must be awaited.
+- `useFeatureFlags` now exposes sync access to server-resolved flags.
+- Config function now receives runtime `H3EventContext`.
 
-[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.5...v1.1.6)
+## v1.1.7 (2024-07-25)
 
-### 📖 Documentation
-
-- Fix documentation links to use actual paths from docs site ([#](https://github.com/rxb3rth/nuxt-feature-flags/commit/#))
-
-### ❤️ Contributors
-
-- Rxb3rth <reliutg@gmail.com>
-
-## v1.1.5
-
-[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.4...v1.1.5)
-
-### 📖 Documentation
-
-- Significantly reduce README size by moving detailed documentation to docs site ([#](https://github.com/rxb3rth/nuxt-feature-flags/commit/#))
-- Keep only essential quick start and API reference in README
-- Reduce package size by ~10KB
-
-### ❤️ Contributors
-
-- Rxb3rth <reliutg@gmail.com>
-
-## v1.1.4
-
-[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.3...v1.1.4)
-
-### 🩹 Fixes
-
-- Resolve build path parsing issue and reorganize project structure ([de3b7c5](https://github.com/rxb3rth/nuxt-feature-flags/commit/de3b7c5))
-
-### ❤️ Contributors
-
-- Rxb3rth <reliutg@gmail.com>
-
-## v1.1.3
-
-[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v1.1.2...v1.1.3)
-
-### 🩹 Fixes
-
-- Improve type definitions and enhance runtime configuration handling ([465b28a](https://github.com/rxb3rth/nuxt-feature-flags/commit/465b28a))
-- Refactor flag handling to support function-based definitions and improve runtime config assignment ([ba9f08f](https://github.com/rxb3rth/nuxt-feature-flags/commit/ba9f08f))
-
-### ❤️ Contributors
-
-- Rxb3rth <reliutg@gmail.com>
-
+- Initial release.

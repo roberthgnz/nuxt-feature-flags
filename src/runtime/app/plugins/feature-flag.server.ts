@@ -1,10 +1,8 @@
-import { defineNuxtPlugin } from 'nuxt/app'
-import { useFeatureFlags } from '#imports'
+import { defineNuxtPlugin, useState } from '#imports'
+import { resolveFeatureFlags } from '#feature-flags/server/utils'
 
-export default defineNuxtPlugin({
-  name: 'feature-flags-fetch-plugin',
-  enforce: 'pre',
-  async setup() {
-    await useFeatureFlags().fetch()
-  },
+export default defineNuxtPlugin(async (nuxtApp) => {
+  const flags = await resolveFeatureFlags(nuxtApp.ssrContext.event)
+  const state = useState('feature-flags', () => flags)
+  nuxtApp.provide('featureFlags', state.value)
 })

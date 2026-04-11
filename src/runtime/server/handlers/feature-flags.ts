@@ -17,16 +17,16 @@ export interface ConfigContext {
 
 /**
  * Define feature flags with optional context-aware configuration
- * 
+ *
  * @param callback - Function that returns flag definitions, optionally using context
  * @returns The callback function for use in config files
- * 
+ *
  * @example
  * // Simple usage without context
  * export default defineFeatureFlags(() => ({
  *   myFlag: true
  * }))
- * 
+ *
  * @example
  * // Context-aware configuration
  * export default defineFeatureFlags((context) => ({

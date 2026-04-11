@@ -165,7 +165,7 @@ describe('variant assignment', () => {
 
   describe('generateVariantHash', () => {
     it('should generate consistent hash for same input', () => {
-      mockDigest.mockReturnValue('5d41402abc4b2a76b9719d911017c592')
+      mockDigest.mockReturnValue('6b51d431df5d7f141cbececcf7b427ba')
 
       const context = { userId: 'user123' }
 
@@ -179,7 +179,7 @@ describe('variant assignment', () => {
       let callCount = 0
       mockDigest.mockImplementation(() => {
         callCount++
-        return callCount === 1 ? '5d41402abc4b2a76b9719d911017c592' : 'abcd1234efgh5678ijkl9012mnop3456'
+        return callCount === 1 ? '6b51d431df5d7f141cbececcf7b427ba' : 'abcd1234efgh5678ijkl9012mnop3456'
       })
 
       const context = { userId: 'user123' }
@@ -194,7 +194,7 @@ describe('variant assignment', () => {
       let callCount = 0
       mockDigest.mockImplementation(() => {
         callCount++
-        return callCount === 1 ? '5d41402abc4b2a76b9719d911017c592' : 'abcd1234efgh5678ijkl9012mnop3456'
+        return callCount === 1 ? '6b51d431df5d7f141cbececcf7b427ba' : 'abcd1234efgh5678ijkl9012mnop3456'
       })
 
       const hash1 = generateVariantHash('test-flag', { userId: 'user1' })
@@ -204,7 +204,7 @@ describe('variant assignment', () => {
     })
 
     it('should fallback to sessionId when userId is not available', () => {
-      mockDigest.mockReturnValue('5d41402abc4b2a76b9719d911017c592')
+      mockDigest.mockReturnValue('6b51d431df5d7f141cbececcf7b427ba')
 
       const context = { sessionId: 'session123' }
 
@@ -215,7 +215,7 @@ describe('variant assignment', () => {
     })
 
     it('should fallback to ipAddress when userId and sessionId are not available', () => {
-      mockDigest.mockReturnValue('5d41402abc4b2a76b9719d911017c592')
+      mockDigest.mockReturnValue('6b51d431df5d7f141cbececcf7b427ba')
 
       const context = { ipAddress: '192.168.1.1' }
 
@@ -226,7 +226,7 @@ describe('variant assignment', () => {
     })
 
     it('should use anonymous fallback when no context is available', () => {
-      mockDigest.mockReturnValue('5d41402abc4b2a76b9719d911017c592')
+      mockDigest.mockReturnValue('6b51d431df5d7f141cbececcf7b427ba')
 
       const context = {}
 
