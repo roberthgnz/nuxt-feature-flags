@@ -1,19 +1,33 @@
 # Changelog
 
+## v2.0.1 (2026-04-11)
+
+### Fixes
+
+- Stabilized runtime flag resolution with safer fallback behavior when config import is unavailable.
+- Added resilient event/cookie handling for server-side variant resolution.
+- Restored backward-compatible `isFeatureEnabled` helper for legacy consumers/tests.
+- Improved async composable typing to avoid declaration-generation issues.
+
+### Quality
+
+- Updated and aligned mocks/tests with v2 runtime behavior.
+- Lint, tests, and module build are passing on branch `v2`.
+
 ## v2.0.0 (2024-07-26)
 
-### ✨ Features
+### Features
 
--   **Runtime Flag Evaluation:** Feature flags are now evaluated at runtime on the server, allowing for dynamic flag sourcing from remote sources like Cloudflare KV.
--   **Asynchronous Configuration:** The `defineFeatureFlags` function can now be asynchronous, enabling the use of `await` for fetching flags.
--   **`useAsyncFeatureFlags` Composable:** A new `useAsyncFeatureFlags` composable has been introduced for client-side flag resolution, with support for `pending` and `error` states.
+- Runtime flag evaluation on the server, allowing dynamic sources (for example, KV/remote services).
+- Asynchronous configuration support in `defineFeatureFlags`.
+- New `useAsyncFeatureFlags` composable with `pending` and `error` states.
 
-### 💥 Breaking Changes
+### Breaking Changes
 
--   **Asynchronous by Default:** The entire module is now asynchronous. This means `getFeatureFlags` on the server is now an `async` function, and the `useAsyncFeatureFlags` composable should be used on the client for asynchronous flag resolution.
--   **`useFeatureFlags` Composable:** The `useFeatureFlags` composable now provides synchronous access to the flags that were resolved on the server. For client-side fetching, use `useAsyncFeatureFlags`.
--   **Configuration Function:** The configuration function now receives the `H3EventContext` at runtime, not build time.
+- `getFeatureFlags` became asynchronous and must be awaited.
+- `useFeatureFlags` now exposes sync access to server-resolved flags.
+- Config function now receives runtime `H3EventContext`.
 
 ## v1.1.7 (2024-07-25)
 
--   Initial release
+- Initial release.
