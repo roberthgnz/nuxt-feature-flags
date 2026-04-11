@@ -42,9 +42,11 @@ export function validateVariants(flagName: string, variants: FlagVariant[]): Val
     return errors
   }
 
-  // Check for duplicate variant names
   const variantNames = new Set<string>()
+  let totalWeight = 0
+
   for (const variant of variants) {
+    // Check for duplicate variant names
     if (variantNames.has(variant.name)) {
       errors.push({
         flag: flagName,
@@ -53,10 +55,8 @@ export function validateVariants(flagName: string, variants: FlagVariant[]): Val
       })
     }
     variantNames.add(variant.name)
-  }
 
-  // Check for valid weights
-  for (const variant of variants) {
+    // Check for valid weights
     if (variant.weight < 0 || variant.weight > 100) {
       errors.push({
         flag: flagName,
@@ -64,20 +64,10 @@ export function validateVariants(flagName: string, variants: FlagVariant[]): Val
         type: 'variant',
       })
     }
-  }
 
-  // Check if total weight exceeds 100
-  const totalWeight = variants.reduce((sum, variant) => sum + variant.weight, 0)
-  if (totalWeight > 100) {
-    errors.push({
-      flag: flagName,
-      error: `Total variant weights (${totalWeight}) exceed 100%`,
-      type: 'variant',
-    })
-  }
+    totalWeight += variant.weight
 
-  // Check for valid variant names
-  for (const variant of variants) {
+    // Check for valid variant names
     const nameError = validateFlagNaming(variant.name)
     if (nameError) {
       errors.push({
@@ -86,6 +76,15 @@ export function validateVariants(flagName: string, variants: FlagVariant[]): Val
         type: 'variant',
       })
     }
+  }
+
+  // Check if total weight exceeds 100
+  if (totalWeight > 100) {
+    errors.push({
+      flag: flagName,
+      error: `Total variant weights (${totalWeight}) exceed 100%`,
+      type: 'variant',
+    })
   }
 
   return errors
