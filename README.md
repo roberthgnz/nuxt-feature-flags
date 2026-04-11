@@ -15,7 +15,7 @@ A powerful, type-safe feature flag module for Nuxt 3 with A/B testing and varian
 - 🛠 **TypeScript Ready** - Full type safety with autocomplete
 - 🧩 **Nuxt 3 Integration** - Seamless integration with auto-imports
 - 🔀 **A/B/n Testing** - Built-in variant support with persistent assignment
-- � **Validateion** - Built-in validation for flag configuration
+-  validating** - Built-in validation for flag configuration
 - 🔒 **Type Safety** - Catch errors early with full type inference
 
 ## 📦 Installation
@@ -41,19 +41,16 @@ export default defineNuxtConfig({
 // feature-flags.config.ts
 import { defineFeatureFlags } from '#feature-flags/handler'
 
-export default defineFeatureFlags(() => ({
-  newDashboard: true,
-  darkMode: false,
-  
-  // A/B test with variants
-  buttonDesign: {
-    enabled: true,
-    variants: [
-      { name: 'control', weight: 50, value: 'blue' },
-      { name: 'treatment', weight: 50, value: 'red' }
-    ]
+export default defineFeatureFlags(async () => {
+  // Fetch flags from a remote source
+  const remoteFlags = await $fetch('https://api.example.com/flags')
+
+  return {
+    newDashboard: true,
+    darkMode: false,
+    ...remoteFlags,
   }
-}))
+})
 ```
 
 ```ts
@@ -72,21 +69,21 @@ export default defineNuxtConfig({
 
 ```vue
 <script setup>
-const { isEnabled, getValue, getVariant } = useFeatureFlags()
+const { flags, isEnabled, getValue } = useFeatureFlags()
+const { flags: asyncFlags, pending, error } = useAsyncFeatureFlags()
 </script>
 
 <template>
   <div>
-    <!-- Simple flag check -->
-    <NewDashboard v-if="isEnabled('newDashboard')" />
-    
-    <!-- Using directive -->
-    <div v-feature="'darkMode'">Dark mode content</div>
-    
-    <!-- A/B test variants -->
-    <button :class="`btn-${getValue('buttonDesign')}`">
-      Click me
-    </button>
+    <!-- From composable -->
+    <NewDashboard v-if="flags.newDashboard?.enabled" />
+
+    <!-- From async composable -->
+    <div v-if="pending">Loading...</div>
+    <div v-else-if="error">Error loading flags</div>
+    <div v-else>
+      <DarkModeToggle v-if="asyncFlags.darkMode?.enabled" />
+    </div>
   </div>
 </template>
 ```
@@ -95,8 +92,10 @@ const { isEnabled, getValue, getVariant } = useFeatureFlags()
 
 ```ts
 // server/api/data.ts
-export default defineEventHandler((event) => {
-  const { isEnabled, getValue } = getFeatureFlags(event)
+import { getFeatureFlags } from '#feature-flags/server/utils'
+
+export default defineEventHandler(async (event) => {
+  const { isEnabled } = await getFeatureFlags(event)
   
   if (!isEnabled('newDashboard')) {
     throw createError({ statusCode: 404 })
@@ -153,15 +152,25 @@ export default defineEventHandler(async (event) => {
 
 ### Client-Side
 
+**`useFeatureFlags`**
+
 ```ts
 const { 
   flags,              // Ref<ResolvedFlags>
-  isEnabled,          // (flag: string, variant?: string) => boolean
-  getVariant,         // (flag: string) => string | undefined
+  isEnabled,          // (flag: string) => boolean
   getValue,           // (flag: string) => any
-  getFlag,            // (flag: string) => ResolvedFlag | undefined
-  fetch               // () => Promise<void>
 } = useFeatureFlags()
+```
+
+**`useAsyncFeatureFlags`**
+
+```ts
+const {
+  flags,              // Ref<ResolvedFlags>
+  pending,            // Ref<boolean>
+  error,              // Ref<Error | null>
+  refresh,            // () => Promise<void>
+} = useAsyncFeatureFlags()
 ```
 
 ### Server-Side
@@ -169,11 +178,9 @@ const {
 ```ts
 const { 
   flags,              // ResolvedFlags
-  isEnabled,          // (flag: string, variant?: string) => boolean
-  getVariant,         // (flag: string) => string | undefined
+  isEnabled,          // (flag: string) => boolean
   getValue,           // (flag: string) => any
-  getFlag             // (flag: string) => ResolvedFlag | undefined
-} = getFeatureFlags(event)
+} = await getFeatureFlags(event)
 ```
 
 ### Template Directive
@@ -186,6 +193,80 @@ const {
   <!-- Show for specific variant -->
   <div v-feature="'myFlag:variantA'">Variant A content</div>
 </template>
+```
+
+## Migration Guide (from v1 to v2)
+
+Version 2 introduces a major shift to runtime, asynchronous feature flag evaluation. This allows for more powerful, dynamic flag sourcing, but it also introduces some breaking changes.
+
+### 1. Asynchronous Flag Configuration
+
+The `defineFeatureFlags` function can now be asynchronous. If you're fetching flags from a remote source, you'll need to update your configuration accordingly.
+
+**Before:**
+
+```ts
+// feature-flags.config.ts
+export default defineFeatureFlags(() => ({
+  newDashboard: true,
+}))
+```
+
+**After:**
+
+```ts
+// feature-flags.config.ts
+export default defineFeatureFlags(async () => {
+  const remoteFlags = await $fetch('https://api.example.com/flags')
+  return {
+    newDashboard: true,
+    ...remoteFlags,
+  }
+})
+```
+
+### 2. `useAsyncFeatureFlags` Composable
+
+A new `useAsyncFeatureFlags` composable has been introduced to handle the asynchronous nature of flag resolution on the client-side. This composable provides `pending` and `error` states to give you more control over the UI during flag resolution.
+
+**Before:**
+
+```vue
+<script setup>
+const { isEnabled } = useFeatureFlags()
+</script>
+```
+
+**After:**
+
+```vue
+<script setup>
+const { flags, pending, error } = useAsyncFeatureFlags()
+</script>
+```
+
+### 3. Server-Side Flag Resolution
+
+The `getFeatureFlags` function on the server is now asynchronous. You'll need to `await` its result.
+
+**Before:**
+
+```ts
+// server/api/data.ts
+export default defineEventHandler((event) => {
+  const { isEnabled } = getFeatureFlags(event)
+  // ...
+})
+```
+
+**After:**
+
+```ts
+// server/api/data.ts
+export default defineEventHandler(async (event) => {
+  const { isEnabled } = await getFeatureFlags(event)
+  // ...
+})
 ```
 
 ## ✅ Validation
@@ -202,6 +283,10 @@ const errors = await validateFeatureFlags({
   failOnErrors: true
 })
 ```
+
+## 🧪 Testing
+
+The test suite for this module is currently experiencing issues with mocking the Nuxt environment. While the core functionality has been manually tested and verified, the automated tests are not passing. Contributions to fix the test suite are welcome.
 
 ## 📚 Documentation
 

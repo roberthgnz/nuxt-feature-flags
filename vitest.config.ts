@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    setupFiles: ['./test/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -20,7 +21,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '~': resolve(__dirname, '.'),
-      '#imports': resolve(__dirname, 'test/mocks/imports.ts'),
+      '#imports': resolve(__dirname, 'test/mocks/nuxt.ts'),
       '#feature-flags/types': resolve(__dirname, 'test/mocks/types.ts'),
       '#feature-flags/config': resolve(__dirname, 'test/mocks/config.ts'),
       '#feature-flags/handler': resolve(__dirname, 'src/runtime/server/handlers/feature-flags.ts'),
