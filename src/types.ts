@@ -26,8 +26,8 @@ export type FlagsSchema = Record<string, FlagValue | FlagConfig>
 
 // Type for the function that defines feature flags, which can be sync or async
 export type FeatureFlagsConfig
-  = FlagsSchema
-  | ((context?: H3EventContext) => FlagsSchema | Promise<FlagsSchema>)
+    = FlagsSchema
+    | ((context?: H3EventContext) => FlagsSchema | Promise<FlagsSchema>)
 
 // Type for the resolved flag after processing
 export interface ResolvedFlag {
