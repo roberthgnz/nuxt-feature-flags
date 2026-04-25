@@ -158,7 +158,8 @@ export function checkUndeclaredFlags(
 
   for (const usedFlag of usedFlags) {
     // Extract base flag name (remove variant suffix if present)
-    const baseFlagName = usedFlag.split(':')[0]
+    const colonIndex = usedFlag.indexOf(':')
+    const baseFlagName = colonIndex === -1 ? usedFlag : usedFlag.substring(0, colonIndex)
 
     if (!declaredSet.has(baseFlagName)) {
       errors.push({
