@@ -1,4 +1,4 @@
-import { getCookie } from 'h3'
+import { getCookie, getRequestIP } from 'h3'
 import type { H3Event } from 'h3'
 import { defu } from 'defu'
 import { logger, logDebug } from '../../../utils/logger'
@@ -48,13 +48,12 @@ function getRuntimeFlags(runtimeConfig: ReturnType<typeof useRuntimeConfig>): Fl
 
 function getVariantContext(event: H3Event | undefined): VariantContext {
   const userId = event?.context?.user?.id || event?.context?.userId
-  const sessionId = safeGetCookie(event, 'session_id')
-    || safeGetCookie(event, 'session-id')
-    || safeGetCookie(event, 'nuxt-session')
 
-  const forwardedHeader = event?.node?.req?.headers?.['x-forwarded-for']
-  const forwarded = Array.isArray(forwardedHeader) ? forwardedHeader[0] : forwardedHeader
-  const ipAddress = forwarded?.split(',')[0]?.trim() || event?.node?.req?.socket?.remoteAddress
+  const sessionId = ['session_id', 'session-id', 'nuxt-session']
+    .map(name => safeGetCookie(event, name))
+    .find(cookie => !!cookie)
+
+  const ipAddress = event ? getRequestIP(event, { xForwardedFor: true }) : undefined
 
   return {
     userId,
