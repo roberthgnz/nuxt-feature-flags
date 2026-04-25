@@ -25,8 +25,8 @@ describe('defineFeatureFlags', () => {
   })
 
   it('should pass context to the callback correctly', () => {
-    const callback = (context?: ConfigContext | any) => ({
-      isDev: context?.isDev ?? false,
+    const callback = (context?: ConfigContext | Record<string, unknown>) => ({
+      isDev: (context as ConfigContext | undefined)?.isDev ?? false,
     })
     const result = defineFeatureFlags(callback)
 
