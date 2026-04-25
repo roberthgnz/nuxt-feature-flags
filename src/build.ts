@@ -65,7 +65,7 @@ function extractFlagUsageFromCode(filePath: string): string[] {
 async function scanSourceFiles(patterns: string[]): Promise<string[]> {
   const flags: string[] = []
 
-  for (const pattern of patterns) {
+  await Promise.all(patterns.map(async (pattern) => {
     try {
       const files = await glob(pattern, { ignore: ['**/node_modules/**', '**/dist/**', '**/.nuxt/**'] })
 
@@ -77,7 +77,7 @@ async function scanSourceFiles(patterns: string[]): Promise<string[]> {
     catch (error) {
       logger.warn(`Failed to scan pattern ${pattern}:`, error)
     }
-  }
+  }))
 
   // Remove duplicates
   return Array.from(new Set(flags))
