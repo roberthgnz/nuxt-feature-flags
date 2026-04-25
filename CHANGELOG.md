@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.0.2 (2026-04-25)
+
+### Security
+
+- Switched server-side IP extraction to `h3`'s `getRequestIP` with `xForwardedFor` handling for safer variant context resolution.
+
+### Performance
+
+- Parallelized source-file scanning during build flag discovery.
+- Optimized undeclared flag validation by avoiding repeated string splitting.
+
+### Quality
+
+- Added unit coverage for `defineFeatureFlags`.
+- Simplified the feature flags API handler.
+- Refactored variant context resolution to reduce cookie lookup duplication.
+
 ## v2.0.1 (2026-04-11)
 
 ### Fixes
