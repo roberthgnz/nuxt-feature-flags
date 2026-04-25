@@ -48,9 +48,10 @@ function getRuntimeFlags(runtimeConfig: ReturnType<typeof useRuntimeConfig>): Fl
 
 function getVariantContext(event: H3Event | undefined): VariantContext {
   const userId = event?.context?.user?.id || event?.context?.userId
-  const sessionId = safeGetCookie(event, 'session_id')
-    || safeGetCookie(event, 'session-id')
-    || safeGetCookie(event, 'nuxt-session')
+
+  const sessionId = ['session_id', 'session-id', 'nuxt-session']
+    .map(name => safeGetCookie(event, name))
+    .find(cookie => !!cookie)
 
   const ipAddress = event ? getRequestIP(event, { xForwardedFor: true }) : undefined
 
