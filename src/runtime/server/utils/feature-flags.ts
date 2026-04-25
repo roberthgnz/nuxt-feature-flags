@@ -1,4 +1,4 @@
-import { getCookie } from 'h3'
+import { getCookie, getRequestIP } from 'h3'
 import type { H3Event } from 'h3'
 import { defu } from 'defu'
 import { logger, logDebug } from '../../../utils/logger'
@@ -52,9 +52,7 @@ function getVariantContext(event: H3Event | undefined): VariantContext {
     || safeGetCookie(event, 'session-id')
     || safeGetCookie(event, 'nuxt-session')
 
-  const forwardedHeader = event?.node?.req?.headers?.['x-forwarded-for']
-  const forwarded = Array.isArray(forwardedHeader) ? forwardedHeader[0] : forwardedHeader
-  const ipAddress = forwarded?.split(',')[0]?.trim() || event?.node?.req?.socket?.remoteAddress
+  const ipAddress = event ? getRequestIP(event, { xForwardedFor: true }) : undefined
 
   return {
     userId,
