@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.0.5
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.4...v2.0.5)
+
+### 🩹 Fixes
+
+- Merge project aliases into jiti config-loader instance ([4077231](https://github.com/rxb3rth/nuxt-feature-flags/commit/4077231))
+
+### 📖 Documentation
+
+- Remove redundant test status note for rendering modes in README ([0158a35](https://github.com/rxb3rth/nuxt-feature-flags/commit/0158a35))
+
+### 🤖 CI
+
+- Pin packageManager to fix broken CI install ([86d5ac6](https://github.com/rxb3rth/nuxt-feature-flags/commit/86d5ac6))
+
+### ❤️ Contributors
+
+- Rxb3rth <reliutg@gmail.com>
+
 ## v2.0.4
 
 [compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.3...v2.0.4)
