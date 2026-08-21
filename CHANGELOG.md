@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.0.4
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.3...v2.0.4)
+
+### 🩹 Fixes
+
+- Stop sharing per-visitor A/B variant assignment across requests ([1585a94](https://github.com/rxb3rth/nuxt-feature-flags/commit/1585a94))
+
+### ❤️ Contributors
+
+- Rxb3rth <reliutg@gmail.com>
+
 ## v2.0.3
 
 [compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.2...v2.0.3)
