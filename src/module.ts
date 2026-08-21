@@ -205,6 +205,7 @@ export default defineNuxtModule<FeatureFlagsConfig>({
               const updatedRuntimeConfig = {
                 flags: options.flags || {},
                 config: options.config,
+                cacheTTL: options.cacheTTL,
               }
               nuxt.options.runtimeConfig.public.featureFlags = defu(
                 nuxt.options.runtimeConfig.public.featureFlags,
@@ -249,6 +250,7 @@ export default defineNuxtModule<FeatureFlagsConfig>({
     const runtimeConfigUpdate = {
       flags: options.flags || {},
       config: options.config,
+      cacheTTL: options.cacheTTL,
     }
     nuxt.options.runtimeConfig.public.featureFlags = defu(
       nuxt.options.runtimeConfig.public.featureFlags,
