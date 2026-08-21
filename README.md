@@ -142,8 +142,6 @@ For a flag with `variants`, each request is bucketed deterministically: the modu
 
 ## Rendering modes
 
-Tested directly against built output for each mode (not just inferred from docs):
-
 | Mode | Status | Notes |
 |---|---|---|
 | **SSR** (`ssr: true`, default) | ✅ Works | Flags resolved per request on the server with the real `H3Event` context, then hydrated on the client. |
