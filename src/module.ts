@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { resolve, isAbsolute } from 'node:path'
 import { defu } from 'defu'
 import { defineNuxtModule, createResolver, addImports, addPlugin, addTypeTemplate, addServerHandler, addServerImportsDir } from '@nuxt/kit'
-import { loadConfig } from 'c12'
+import { createJiti } from 'jiti'
 import type { FeatureFlagsConfig, FlagDefinition } from './types'
 import { logger, logDebug } from './utils/logger'
 
@@ -63,32 +63,36 @@ export default defineNuxtModule<FeatureFlagsConfig>({
 
       try {
         logger.info(`[module-setup] Loading feature flags from config file: ${options.config}`)
-        logDebug(`[module-setup] Using c12 loader with jiti for config file evaluation`)
+        logDebug(`[module-setup] Using jiti to read the config file's export shape`)
 
-        const { config: configFlags, configFile } = await loadConfig<FeatureFlagsConfig>({
-          configFile: options.config.replace(/\.\w+$/, ''),
-          cwd: nuxt.options.rootDir,
-          jitiOptions: {
-            interopDefault: true,
-            moduleCache: false, // Disable cache for HMR
-            alias: {
-              '#feature-flags/handler': resolver.resolve('./runtime/server/handlers/feature-flags'),
-            },
-          },
-        })
-
-        // Validate that the config file exists
-        if (!configFile || !existsSync(configFile)) {
-          const attemptedPath = configFile || resolvedConfigPath
+        // Validate that the config file exists before attempting to load it
+        if (!existsSync(resolvedConfigPath)) {
           logger.error(
-            `[module-setup] Failed to load config file at '${attemptedPath}': File not found. `
+            `[module-setup] Failed to load config file at '${resolvedConfigPath}': File not found. `
             + `Ensure the path is correct and relative to the project root (${nuxt.options.rootDir}). `
-            + `Attempted to resolve '${options.config}' to '${attemptedPath}'.`,
+            + `Attempted to resolve '${options.config}' to '${resolvedConfigPath}'.`,
           )
           return null
         }
 
+        const configFile = resolvedConfigPath
         logDebug(`[module-setup] Config file found at: ${configFile}`)
+
+        // Import the raw module export ourselves instead of going through c12's
+        // `loadConfig`, which unconditionally *invokes* a function-shaped default
+        // export with no arguments while resolving the config. Config files that
+        // export a function (e.g. `defineFeatureFlags(context => ...)`) are meant
+        // to be evaluated per-request on the server with the real H3Event context
+        // — not eagerly at build time with no context at all, which is what broke
+        // request-context-dependent configs (e.g. Cloudflare KV bindings).
+        const jiti = createJiti(nuxt.options.rootDir, {
+          interopDefault: true,
+          moduleCache: false, // Disable cache for HMR
+          alias: {
+            '#feature-flags/handler': resolver.resolve('./runtime/server/handlers/feature-flags'),
+          },
+        })
+        const configFlags = await jiti.import<FeatureFlagsConfig>(configFile, { default: true })
 
         // Validate config structure
         if (configFlags === undefined || configFlags === null) {
