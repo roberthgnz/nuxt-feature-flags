@@ -89,6 +89,7 @@ export default defineNuxtModule<FeatureFlagsConfig>({
           interopDefault: true,
           moduleCache: false, // Disable cache for HMR
           alias: {
+            ...nuxt.options.alias,
             '#feature-flags/handler': resolver.resolve('./runtime/server/handlers/feature-flags'),
           },
         })
