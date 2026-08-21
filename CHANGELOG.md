@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.0.3
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.2...v2.0.3)
+
+### 🚀 Enhancements
+
+- Add utility functions and defaults for feature flags logging and configuration ([3bd9cd6](https://github.com/rxb3rth/nuxt-feature-flags/commit/3bd9cd6))
+- Replace c12 with jiti for config file loading in module setup ([e837018](https://github.com/rxb3rth/nuxt-feature-flags/commit/e837018))
+- Add cacheTTL option to feature flags runtime configuration ([a9db5f8](https://github.com/rxb3rth/nuxt-feature-flags/commit/a9db5f8))
+
+### ❤️ Contributors
+
+- Rxb3rth <reliutg@gmail.com>
+
 ## v2.0.2 (2026-04-25)
 
 ### Security
