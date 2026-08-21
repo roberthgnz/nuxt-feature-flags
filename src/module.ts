@@ -26,6 +26,7 @@ export default defineNuxtModule<FeatureFlagsConfig>({
 
     nuxt.options.alias['#feature-flags/types'] = './types/nuxt-feature-flags.d.ts'
     nuxt.options.alias['#feature-flags/handler'] = resolver.resolve('./runtime/server/handlers/feature-flags')
+    nuxt.options.alias['#feature-flags/server/utils'] = resolver.resolve('./runtime/server/utils/feature-flags')
 
     // Create default config that handles inline flags properly
     let configPath = resolver.resolve('./runtime/feature-flags.config')
