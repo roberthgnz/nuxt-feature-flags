@@ -13,9 +13,9 @@ Type-safe feature flags for Nuxt 3 and Nuxt 4, with server-side runtime evaluati
 
 - Works with Nuxt 3.1+ and Nuxt 4 (same module, no separate build).
 - Flags defined inline in `nuxt.config.ts`, or in a separate config file — sync or async, plain object or a function evaluated per-request.
-- Deterministic, sticky A/B/n variant assignment (hashed by user id, session cookie, or IP — no external service needed).
+- Deterministic, sticky A/B/n variant assignment (hashed by user id, session cookie, or IP — no external service needed), computed fresh per visitor on every request.
 - SSR-safe: flags are resolved once per request on the server, then reused on the client without a second computation.
-- Server response cache with a configurable TTL to avoid recomputing flags on every request.
+- Works across SSR, SPA, and static generation — see [Rendering modes](#rendering-modes) for per-mode support and caveats.
 - Auto-imported composables, a `v-feature` directive, and a server-side helper.
 
 ## Installation
@@ -140,6 +140,22 @@ import { getFeatureFlags } from '#feature-flags/server/utils'
 
 For a flag with `variants`, each request is bucketed deterministically: the module hashes `flagName + identifier` (SHA-256), where `identifier` is the first available of `event.context.user.id`, a session cookie (`session_id` / `session-id` / `nuxt-session`), or the request IP. The same visitor always gets the same variant for a given flag, without any external experimentation service.
 
+## Rendering modes
+
+Tested directly against built output for each mode (not just inferred from docs):
+
+| Mode | Status | Notes |
+|---|---|---|
+| **SSR** (`ssr: true`, default) | ✅ Works | Flags resolved per request on the server with the real `H3Event` context, then hydrated on the client. |
+| **SPA** (`ssr: false`, deployed with a live Nitro server) | ✅ Works | The `.server` plugin correctly no-ops (no SSR render happens in this mode); the client fetches flags from `/api/_feature-flags/feature-flags` on mount instead. |
+| **SPA on fully static hosting** (`ssr: false`, no server function at all — e.g. GitHub Pages) | ⚠️ Not supported | The flags API route needs a live server. With no server in the output, that request 404s and flags stay unresolved. |
+| **Static generation** (`nuxi generate`) | ⚠️ Works, with a caveat | Flags (including A/B variants) are computed **once at build time** and baked into the prerendered HTML for every visitor. There's no live request to differentiate visitors, so this is fine for static config-style flags, but it is not real per-visitor A/B testing — everyone who loads a given static build gets the same variant. |
+| **Hybrid rendering** (`routeRules` with `isr`/`swr`/`prerender`) | ✅ Works | Routes that still render on the server go through the same code path as SSR. |
+
+### How server-side caching works
+
+`resolveFeatureFlags` caches the **flag definitions** returned by your config (the same for every visitor) for up to `cacheTTL` ms, so a request-heavy server doesn't re-run your config function (e.g. re-`$fetch` a remote source) on every single request. Per-visitor A/B variant assignment is a cheap deterministic hash and is **always recomputed fresh for every request** from that request's own context — it is never cached or reused across visitors, on any deployment target (Node, serverless, edge, warm or cold instances).
+
 ## Configuration reference
 
 ```ts
@@ -148,7 +164,7 @@ export default defineNuxtConfig({
   featureFlags: {
     config: './feature-flags.config.ts', // path to a config file (optional)
     flags: { /* inline flag definitions, merged with the config file */ },
-    cacheTTL: 5000, // ms the server caches resolved flags for (default: 1000)
+    cacheTTL: 5000, // ms the server caches flag definitions for (default: 1000) — see "How server-side caching works" above
   },
 })
 ```

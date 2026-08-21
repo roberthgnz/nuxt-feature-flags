@@ -8,8 +8,11 @@ import type { VariantContext } from '../../../types/feature-flags'
 import { getVariantForFlag } from './variant-assignment'
 import { useRuntimeConfig } from '#imports'
 
-// Define a cache for feature flags to avoid repeated lookups
-let flagCache: ResolvedFlags | null = null
+// Cache only the flag *definitions* returned by the config (the same for
+// every visitor, and safe to reuse for cacheTTL ms) — never the per-visitor
+// resolved output. Variant assignment depends on each visitor's identity and
+// is always recomputed fresh below, so it can never leak between visitors.
+let flagsCache: FlagsSchema | null = null
 let cacheTimestamp = 0
 
 function safeGetCookie(event: H3Event | undefined, name: string): string | undefined {
@@ -69,50 +72,46 @@ export async function resolveFeatureFlags(event: H3Event): Promise<ResolvedFlags
   const { featureFlags } = runtimeConfig.public
   const cacheTTL = featureFlags.cacheTTL ?? DEFAULTS.CACHE_TTL
 
-  // In dev mode, check if the cache is older than 1 second
-  if (import.meta.dev) {
-    if (flagCache && now - cacheTimestamp < cacheTTL) {
-      logDebug('[server-cache] Using cached feature flags (dev mode, < 1s old)')
-      return flagCache
-    }
-  }
-  // In production, use the cache if it's available
-  else if (flagCache) {
-    logDebug('[server-cache] Using cached feature flags (production)')
-    return flagCache
-  }
-
-  logDebug('Resolving feature flags on the server')
-
   try {
-    // Dynamically import the feature flags config
-    let configFlags: FlagsSchema = {}
+    let flags: FlagsSchema
 
-    try {
-      const { default: config } = await import('#feature-flags/config')
-
-      // If the config is a function, evaluate it with the request context
-      if (typeof config === 'function') {
-        logDebug('Evaluating feature flags config function with H3Event context')
-        configFlags = await Promise.resolve(config(event.context))
-      }
-      else if (config && typeof config === 'object') {
-        logDebug('Using feature flags config object')
-        configFlags = config as FlagsSchema
-      }
+    if (flagsCache && now - cacheTimestamp < cacheTTL) {
+      logDebug('[server-cache] Using cached feature flag definitions')
+      flags = flagsCache
     }
-    catch (error) {
-      logDebug('Could not import #feature-flags/config, falling back to runtime flags only', error)
+    else {
+      logDebug('Resolving feature flag definitions on the server')
+
+      // Dynamically import the feature flags config
+      let configFlags: FlagsSchema = {}
+
+      try {
+        const { default: config } = await import('#feature-flags/config')
+
+        // If the config is a function, evaluate it with the request context
+        if (typeof config === 'function') {
+          logDebug('Evaluating feature flags config function with H3Event context')
+          configFlags = await Promise.resolve(config(event.context))
+        }
+        else if (config && typeof config === 'object') {
+          logDebug('Using feature flags config object')
+          configFlags = config as FlagsSchema
+        }
+      }
+      catch (error) {
+        logDebug('Could not import #feature-flags/config, falling back to runtime flags only', error)
+      }
+
+      // Merge with inline flags if any
+      const inlineFlags = getRuntimeFlags(runtimeConfig)
+      flags = defu(configFlags, inlineFlags)
+      flagsCache = flags
+      cacheTimestamp = now
     }
 
-    // Merge with inline flags if any
-    const inlineFlags = getRuntimeFlags(runtimeConfig)
-    const flags = defu(configFlags, inlineFlags)
-
-    // Resolve the flags and store them in the cache
+    // Per-visitor variant assignment: always computed fresh from this
+    // request's own context, never reused from another visitor's request.
     const resolved = resolveFlags(flags, event)
-    flagCache = resolved
-    cacheTimestamp = now
 
     logDebug(`Resolved ${Object.keys(resolved).length} feature flags`)
 
