@@ -52,7 +52,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:types": "vue-tsc --noEmit && nuxi prepare test/fixtures/basic && vue-tsc --noEmit -p test/fixtures/basic"
+    "test:types": "vue-tsc --noEmit && nuxi prepare test/fixtures/basic && vue-tsc --noEmit -p test/fixtures/basic/.nuxt/tsconfig.json"
   },
   "dependencies": {
     "@nuxt/kit": "^3.15.4",
