@@ -24,3 +24,28 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npx nypm@latest i
+
+      - name: Install Chromium for browser tests
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Type check
+        run: npm run test:types
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npx nuxt-module-build build

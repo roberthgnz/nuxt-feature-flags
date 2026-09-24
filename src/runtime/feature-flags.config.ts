@@ -1,12 +1,6 @@
-import { useRuntimeConfig } from '#imports'
-import { defineFeatureFlags } from '#feature-flags/handler'
+import type { FlagsSchema } from './types'
 
-export default defineFeatureFlags(() => {
-  const runtimeConfig = useRuntimeConfig()
+// Used when no `config` file is set: only the inline flags from `nuxt.config` apply.
+const flags: FlagsSchema = {}
 
-  // For inline flags, they're stored directly in featureFlags.flags
-  // For config file flags, they're merged and available as the entire featureFlags object
-  const flags = runtimeConfig.public.featureFlags?.flags || runtimeConfig.public.featureFlags || {}
-
-  return flags
-})
+export default flags

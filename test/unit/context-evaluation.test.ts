@@ -142,7 +142,7 @@ describe('Property 7: Context evaluation', () => {
         expect(objectExport).toEqual(flags)
 
         // Test function export
-        const functionExport = () => flags
+        const functionExport = (_context?: unknown) => flags
         const buildContext = {
           isDev: true,
           isProduction: false,

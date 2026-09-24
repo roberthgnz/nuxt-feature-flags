@@ -6,21 +6,16 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./test/setup.ts'],
+    // e2e tests build a real Nuxt app first.
+    hookTimeout: 120_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/**',
-        'dist/**',
-        'playground/**',
-        '**/*.d.ts',
-        'test/**',
-      ],
+      include: ['src/**'],
     },
   },
   resolve: {
     alias: {
-      '~': resolve(__dirname, '.'),
       '#imports': resolve(__dirname, 'test/mocks/nuxt.ts'),
       '#feature-flags/types': resolve(__dirname, 'test/mocks/types.ts'),
       '#feature-flags/config': resolve(__dirname, 'test/mocks/config.ts'),

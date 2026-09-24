@@ -1,9 +1,4 @@
 export default {
-  failOnWarn: false,
-  externals: [
-    'defu',
-    'pathe',
-    'c12',
-    'jiti',
-  ],
+  entries: ['./src/build'],
+  externals: ['h3'],
 }

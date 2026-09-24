@@ -1,1 +1,1 @@
-export type { FeatureFlagsConfig, Flag, FlagDefinition, FlagResolved, FlagValue } from './feature-flags'
+export type { FeatureFlagsConfig, FlagConfig, FlagDefinition, FlagValue, FlagVariant, VariantContext } from './feature-flags'

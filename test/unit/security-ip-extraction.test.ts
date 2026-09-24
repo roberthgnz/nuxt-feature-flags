@@ -1,54 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { H3Event } from 'h3'
-import { getRequestIP } from 'h3'
-import { setupMocks } from '../utils'
-import { getFeatureFlags } from '~/src/runtime/server/utils/feature-flags'
-import { useRuntimeConfig } from '#imports'
+import { describe, it, expect } from 'vitest'
+import { generateVariantHash } from '../../src/runtime/server/utils/variant-assignment'
+import { createTestEvent, loadServerUtils } from '../utils'
 
-vi.mock('h3', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('h3')>()
-  return {
-    ...actual,
-    getRequestIP: vi.fn(),
-  }
-})
+describe('visitor IP extraction', () => {
+  it('buckets anonymous visitors behind a proxy by the client IP from x-forwarded-for', async () => {
+    const variants = [{ name: 'low', weight: 50 }, { name: 'high', weight: 50 }]
+    const { resolveFeatureFlags } = await loadServerUtils({ exp: { enabled: true, variants } })
 
-describe('getFeatureFlags security - IP extraction', () => {
-  beforeEach(() => {
-    setupMocks()
-    vi.clearAllMocks()
-    useRuntimeConfig.mockReturnValue({
-      public: {
-        featureFlags: {
-          flags: {
-            testFlag: {
-              value: 'off',
-              variants: [
-                { name: 'on', value: 'on', weight: 100 },
-              ],
-            },
-          },
-        },
-      },
-    })
-  })
+    // Pick a client IP whose bucket differs from the proxy's, so the assertion is meaningful.
+    const proxy = '10.0.0.1'
+    const proxyBucket = generateVariantHash('exp', { ipAddress: proxy }) < 50 ? 'low' : 'high'
+    const client = Array.from({ length: 50 }, (_, i) => `203.0.113.${i}`)
+      .find(ip => (generateVariantHash('exp', { ipAddress: ip }) < 50 ? 'low' : 'high') !== proxyBucket)!
 
-  it('should use getRequestIP with xForwardedFor: true', async () => {
-    const mockEvent = {
-      context: {},
-      node: {
-        req: {
-          headers: {
-            'x-forwarded-for': '1.2.3.4, 5.6.7.8',
-          },
-        },
-      },
-    } as unknown as H3Event
+    const flags = await resolveFeatureFlags(createTestEvent({ ip: proxy, headers: { 'x-forwarded-for': `${client}, ${proxy}` } }))
 
-    vi.mocked(getRequestIP).mockReturnValue('1.2.3.4')
-
-    await getFeatureFlags(mockEvent)
-
-    expect(getRequestIP).toHaveBeenCalledWith(mockEvent, { xForwardedFor: true })
+    expect(flags.exp?.variant).not.toBe(proxyBucket)
   })
 })

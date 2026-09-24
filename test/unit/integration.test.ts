@@ -196,7 +196,7 @@ describe('edge cases and error handling', () => {
   })
 
   it('should handle missing flag access', () => {
-    const flags = {}
+    const flags: Record<string, { enabled: boolean } | undefined> = {}
 
     // Accessing non-existent flags should be safe
     expect(flags['nonExistent']).toBeUndefined()
@@ -234,7 +234,7 @@ describe('performance considerations', () => {
   it('should handle large number of flags efficiently', () => {
     const largeConfig = {
       environment: 'test',
-      flags: {},
+      flags: {} as Record<string, { enabled: boolean, value: string }>,
     }
 
     // Generate many flags

@@ -1,4 +1,5 @@
-// Mock config for testing
+// Default `#feature-flags/config` for tests. Tests that need a different config use
+// `loadServerUtils()` from test/utils.ts, which swaps this module out.
 export default {
   simpleFlag: true,
   disabledFlag: false,
@@ -8,13 +9,6 @@ export default {
     variants: [
       { name: 'control', weight: 50, value: 'control' },
       { name: 'treatment', weight: 50, value: 'treatment' },
-    ],
-  },
-  gradualRollout: {
-    enabled: true,
-    variants: [
-      { name: 'disabled', weight: 80, value: false },
-      { name: 'enabled', weight: 20, value: true },
     ],
   },
 }
