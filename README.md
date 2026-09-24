@@ -119,11 +119,23 @@ Flags are evaluated once per request: the page render, your API routes and middl
 | `{ enabled: false, value }` | disabled, never assigned a variant |
 | `{ enabled: true, value }` | enabled, with `value` |
 | `{ value }` (no `enabled`) | enabled when `value` is truthy |
-| `{ enabled: true, variants }` | enabled, value of the visitor's variant (or the flag's `value` if the variant has none). A variant with `value: false` turns the flag off for its visitors — handy for gradual rollouts |
+| `{ enabled: true, variants }` | enabled, value of the visitor's variant (or the flag's `value` if the variant has none). A variant with `value: false` turns the flag off for its visitors. Visitors outside every variant (when weights add up to less than 100) get the flag's own `value` and no variant |
 
 ## Variants (A/B/n testing)
 
-Each visitor is bucketed by hashing `flagName + identifier`, where the identifier is the first available of `event.context.user.id` (or `event.context.userId`), a session cookie (`session_id`, `session-id`, `nuxt-session`), or the client IP. The same visitor always gets the same variant of a flag, and buckets of different flags are independent. Weights are normalized, so they don't need to add up to 100.
+Each visitor is bucketed by hashing `flagName + identifier`, where the identifier is the first available of `event.context.user.id` (or `event.context.userId`), a session cookie (`session_id`, `session-id`, `nuxt-session`), or the client IP. The same visitor always gets the same variant of a flag, and buckets of different flags are independent.
+
+Weights are percentages of traffic. When they add up to less than 100, the remaining visitors get no variant and see the flag's own `value`, which makes gradual rollouts a one-liner:
+
+```ts
+newCheckout: {
+  enabled: true,
+  value: false, // the other 80%: flag off, no variant
+  variants: [{ name: 'rollout', weight: 20, value: true }], // 20% of visitors
+},
+```
+
+Raise the weight to roll out further: visitors already in the rollout stay in it. Weights adding up to more than 100 are scaled down to fit (and reported as a validation error).
 
 ```ts
 const { isEnabled, getVariant } = useFeatureFlags()
@@ -213,6 +225,7 @@ In development, invalid definitions are also reported in the server console.
 
 ## Migrating from 2.0
 
+- Variant weights adding up to less than 100 are no longer scaled up: the remainder of visitors gets no variant. Before, `[{ name: 'new', weight: 20 }]` sent 100% of visitors to `new`; now it sends 20%. Configs whose weights add up to exactly 100 behave as before, and visitors keep their variants.
 - `isEnabled('flag:variant')` now works everywhere (it always returned `false` before).
 - A function config is no longer cached for 1s by default — that cache shared one visitor's flags with others. Set `cacheTTL` explicitly if your config doesn't depend on the visitor.
 - Inline flags moved from `runtimeConfig.public.featureFlags` to the server-only `runtimeConfig.featureFlags` (env overrides: `NUXT_FEATURE_FLAGS_FLAGS_*` instead of `NUXT_PUBLIC_FEATURE_FLAGS_FLAGS_*`).
