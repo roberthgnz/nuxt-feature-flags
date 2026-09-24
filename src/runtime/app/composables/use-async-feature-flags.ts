@@ -1,32 +1,56 @@
+import { getCurrentInstance, onMounted, ref } from 'vue'
 import type { Ref } from 'vue'
-import { useNuxtApp, useFetch, useState } from '#imports'
-import type { ResolvedFlags } from '#feature-flags/types'
+import type { FeatureFlagsHelpers, ResolvedFlags } from '../../types'
+import { createFlagsHelpers } from '../../shared/helpers'
+import { refreshFeatureFlags, useFeatureFlagsState } from '../utils/state'
+import { useNuxtApp } from '#imports'
+import type { FlagName } from '#feature-flags/types'
 
-export interface UseAsyncFeatureFlagsResult {
+export interface UseAsyncFeatureFlagsOptions {
+  /** Re-fetch the flags as soon as the component mounts. Defaults to `true`. */
+  immediate?: boolean
+}
+
+export interface UseAsyncFeatureFlagsResult extends Omit<FeatureFlagsHelpers<FlagName>, 'flags'> {
   flags: Ref<ResolvedFlags>
   pending: Ref<boolean>
   error: Ref<unknown>
   refresh: () => Promise<void>
 }
 
-export const useAsyncFeatureFlags = (): UseAsyncFeatureFlagsResult => {
-  const { $featureFlags } = useNuxtApp()
-  const flags = useState<ResolvedFlags>('feature-flags', () => $featureFlags)
+/**
+ * Same flags as `useFeatureFlags()`, plus a `refresh()` that re-evaluates them on the
+ * server. Refreshing updates the shared state, so every other consumer updates too.
+ */
+export function useAsyncFeatureFlags(options: UseAsyncFeatureFlagsOptions = {}): UseAsyncFeatureFlagsResult {
+  const nuxtApp = useNuxtApp()
+  const flags = useFeatureFlagsState()
+  const pending = ref(false)
+  const error = ref<unknown>(null)
 
-  const { data, pending, error, refresh } = useFetch<ResolvedFlags>('/api/_feature-flags/feature-flags', {
-    server: false, // We already have them on ssr
-    default: () => flags.value,
-  })
-
-  // Update the state when new data is fetched
-  if (data.value) {
-    flags.value = data.value
+  const refresh = async () => {
+    pending.value = true
+    error.value = null
+    try {
+      await refreshFeatureFlags(nuxtApp)
+    }
+    catch (err) {
+      error.value = err
+    }
+    finally {
+      pending.value = false
+    }
   }
 
-  return {
-    flags,
-    pending: pending as Ref<boolean>,
-    error: error as Ref<unknown>,
-    refresh: refresh as () => Promise<void>,
+  if (import.meta.client && options.immediate !== false) {
+    if (getCurrentInstance()) {
+      onMounted(refresh)
+    }
+    else {
+      refresh()
+    }
   }
+
+  const { flags: _flags, ...helpers } = createFlagsHelpers<FlagName>(flags.value)
+  return { flags, pending, error, refresh, ...helpers }
 }

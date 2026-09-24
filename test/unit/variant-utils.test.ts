@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateVariantHash, assignVariant, getVariantForFlag } from '../../src/runtime/server/utils/variant-assignment'
-import type { FlagVariant, VariantContext } from '../../src/types/feature-flags'
+import type { FlagVariant } from '../../src/runtime/types'
+import type { VariantContext } from '../../src/runtime/server/utils/variant-assignment'
 
 describe('variant assignment utilities', () => {
   describe('generateVariantHash', () => {
@@ -167,10 +168,10 @@ describe('variant assignment utilities', () => {
 
     it('should work with complex variant configurations', () => {
       const complexVariants: FlagVariant[] = [
-        { name: 'blue', weight: 40, value: { color: 'blue', intensity: 0.8 } },
-        { name: 'red', weight: 30, value: { color: 'red', intensity: 0.9 } },
-        { name: 'green', weight: 20, value: { color: 'green', intensity: 0.7 } },
-        { name: 'yellow', weight: 10, value: { color: 'yellow', intensity: 0.6 } },
+        { name: 'blue', weight: 40, value: { color: 'blue', intensity: 0.8 } as never },
+        { name: 'red', weight: 30, value: { color: 'red', intensity: 0.9 } as never },
+        { name: 'green', weight: 20, value: { color: 'green', intensity: 0.7 } as never },
+        { name: 'yellow', weight: 10, value: { color: 'yellow', intensity: 0.6 } as never },
       ]
 
       const result = getVariantForFlag('colorTest', complexVariants, { userId: 'user123' })

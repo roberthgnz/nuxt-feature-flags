@@ -1,39 +1,24 @@
-import type { H3EventContext } from 'h3'
-import type { FlagDefinition } from '../../types'
+import type { FeatureFlagsConfigInput, FlagsContext, FlagsSchema } from '../../types'
+
+export type { FlagsContext }
+
+/** @deprecated Config functions receive the request's `event.context` ({@link FlagsContext}). */
+export type ConfigContext = FlagsContext
 
 /**
- * Context passed to config functions during evaluation
- */
-export interface ConfigContext {
-  /** Whether the application is in development mode */
-  isDev: boolean
-  /** Whether the application is in production mode */
-  isProduction: boolean
-  /** Root directory of the project */
-  rootDir: string
-  /** Current phase: 'build' during module setup, 'runtime' during request handling */
-  phase: 'build' | 'runtime'
-}
-
-/**
- * Define feature flags with optional context-aware configuration
- *
- * @param callback - Function that returns flag definitions, optionally using context
- * @returns The callback function for use in config files
+ * Typed helper for `feature-flags.config.ts`. Returns its argument untouched; its
+ * only job is inference, so the generated flag names stay precise.
  *
  * @example
- * // Simple usage without context
- * export default defineFeatureFlags(() => ({
- *   myFlag: true
- * }))
+ * export default defineFeatureFlags({ newDashboard: true })
  *
  * @example
- * // Context-aware configuration
- * export default defineFeatureFlags((context) => ({
- *   debugMode: context?.isDev ?? false,
- *   apiEndpoint: context?.isProduction ? 'https://api.prod.com' : 'http://localhost:3000'
+ * // Evaluated on the server for every request, with the request's `event.context`
+ * export default defineFeatureFlags(async context => ({
+ *   isAdmin: context.user?.role === 'admin',
+ *   remoteFlag: await $fetch('https://flags.example.com/remote'),
  * }))
  */
-export function defineFeatureFlags(callback: (context?: ConfigContext | H3EventContext) => FlagDefinition) {
-  return callback
+export function defineFeatureFlags<T extends FlagsSchema>(input: FeatureFlagsConfigInput<T>): FeatureFlagsConfigInput<T> {
+  return input
 }

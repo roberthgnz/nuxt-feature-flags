@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import type { FlagVariant } from '../../src/types/feature-flags'
+import type { FlagVariant } from '../../src/runtime/types'
 
 // Mock crypto module with different return values for different inputs
 const mockDigest = vi.fn()

@@ -1,180 +1,118 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { resolve } from 'pathe'
 import { glob } from 'glob'
-import { logger } from './utils/logger'
+import { createJiti } from 'jiti'
+import type { FlagsSchema } from './runtime/types'
 import type { ValidationError } from './runtime/server/utils/validation'
-import { validateFlagDefinition, checkUndeclaredFlags } from './runtime/server/utils/validation'
+import { checkUndeclaredFlags, validateFlagDefinition } from './runtime/server/utils/validation'
+import { logger } from './utils/logger'
+
+export type { ValidationError }
 
 export interface BuildValidationOptions {
+  /** Flags config file. Defaults to `feature-flags.config.ts`. */
   configPath?: string
+  /** Inline flags from `nuxt.config`, if you use them. */
+  flags?: FlagsSchema
+  /** Globs of files to scan for flag usage. */
   srcPatterns?: string[]
+  /** Directory the paths and globs are relative to. Defaults to `process.cwd()`. */
+  cwd?: string
+  /** Throw when problems are found (for CI). */
   failOnErrors?: boolean
 }
 
-/**
- * Extract flag usage from code files
- */
-function extractFlagUsageFromCode(filePath: string): string[] {
-  const flags: string[] = []
+const DEFAULT_PATTERNS = ['**/*.{vue,ts,tsx,js,jsx,mjs}']
+const IGNORE = ['**/node_modules/**', '**/dist/**', '**/.nuxt/**', '**/.output/**']
 
-  try {
-    const content = readFileSync(filePath, 'utf-8')
+const USAGE_PATTERNS = [
+  // isEnabled('flag'), getValue("flag"), getVariant(`flag`)
+  /\b(?:isEnabled|getValue|getVariant)\(\s*(['"`])([^'"`]+)\1\s*\)/g,
+  // v-feature="'flag'" / v-feature='"flag:variant"'
+  /\bv-feature=(["'])\s*['"`]([^'"`]+)['"`]\s*\1/g,
+]
 
-    // Match isEnabled('flagName') or isEnabled('flagName:variant')
-    const isEnabledMatches = content.match(/isEnabled\(['"`]([^'"`]+)['"`]\)/g)
-    if (isEnabledMatches) {
-      for (const match of isEnabledMatches) {
-        const flagMatch = match.match(/['"`]([^'"`]+)['"`]/)
-        if (flagMatch) {
-          flags.push(flagMatch[1])
-        }
-      }
-    }
-
-    // Match v-feature="'flagName'" or v-feature="'flagName:variant'"
-    const vFeatureMatches = content.match(/v-feature=['"`]([^'"`]+)['"`]/g)
-    if (vFeatureMatches) {
-      for (const match of vFeatureMatches) {
-        const flagMatch = match.match(/['"`]([^'"`]+)['"`]/)
-        if (flagMatch) {
-          flags.push(flagMatch[1])
-        }
-      }
-    }
-
-    // Match template conditions like v-if="isEnabled('flagName')"
-    const vIfMatches = content.match(/v-if=['"`][^'"`]*isEnabled\(['"`]([^'"`]+)['"`]\)[^'"`]*['"`]/g)
-    if (vIfMatches) {
-      for (const match of vIfMatches) {
-        const flagMatch = match.match(/isEnabled\(['"`]([^'"`]+)['"`]\)/)
-        if (flagMatch) {
-          flags.push(flagMatch[1])
-        }
-      }
+/** Flag names (`flag` or `flag:variant`) referenced in a source file's content. */
+export function extractFlagUsage(content: string): string[] {
+  const flags = new Set<string>()
+  for (const pattern of USAGE_PATTERNS) {
+    for (const match of content.matchAll(pattern)) {
+      flags.add(match[2]!)
     }
   }
-  catch (error) {
-    logger.warn(`Failed to read file ${filePath}:`, error)
-  }
-
-  return flags
+  return [...flags]
 }
 
 /**
- * Scan source files for flag usage
- */
-async function scanSourceFiles(patterns: string[]): Promise<string[]> {
-  const flags: string[] = []
-
-  await Promise.all(patterns.map(async (pattern) => {
-    try {
-      const files = await glob(pattern, { ignore: ['**/node_modules/**', '**/dist/**', '**/.nuxt/**'] })
-
-      for (const file of files) {
-        const fileFlags = extractFlagUsageFromCode(file)
-        flags.push(...fileFlags)
-      }
-    }
-    catch (error) {
-      logger.warn(`Failed to scan pattern ${pattern}:`, error)
-    }
-  }))
-
-  // Remove duplicates
-  return Array.from(new Set(flags))
-}
-
-/**
- * Validate feature flags configuration and usage
+ * Validates the flags config (names, variant weights...) and checks that every flag
+ * used in the source code is declared. Meant for CI:
+ *
+ * @example
+ * import { validateFeatureFlags } from 'nuxt-feature-flags/build'
+ * await validateFeatureFlags({ failOnErrors: true })
  */
 export async function validateFeatureFlags(options: BuildValidationOptions = {}): Promise<ValidationError[]> {
-  const errors: ValidationError[] = []
-
-  // Default options
   const {
     configPath = 'feature-flags.config.ts',
-    srcPatterns = ['**/*.vue', '**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx'],
+    flags: inlineFlags = {},
+    srcPatterns = DEFAULT_PATTERNS,
+    cwd = process.cwd(),
     failOnErrors = false,
   } = options
 
-  // Load and validate flag configuration
-  let declaredFlags: string[] = []
+  const errors: ValidationError[] = []
+  const configFlags = await loadConfigFlags(resolve(cwd, configPath), errors)
+  const declared = { ...inlineFlags, ...configFlags }
+  errors.push(...validateFlagDefinition(declared))
 
-  if (existsSync(configPath)) {
-    try {
-      // This is a simplified version - in practice, you'd want to use the same
-      // config loading mechanism as the main module
-      const { loadConfig } = await import('c12')
-      const { config } = await loadConfig({
-        configFile: configPath.replace(/\.\w+$/, ''),
-        jitiOptions: {
-          interopDefault: true,
-          moduleCache: false,
-        },
-      })
+  const files = await glob(srcPatterns, { cwd, absolute: true, ignore: IGNORE })
+  const used = new Set(files.flatMap(file => extractFlagUsage(readFileSync(file, 'utf-8'))))
+  errors.push(...checkUndeclaredFlags(Object.keys(declared), [...used]))
 
-      if (config) {
-        // Validate flag configuration
-        const configErrors = validateFlagDefinition(config)
-        errors.push(...configErrors)
+  logger.info(`Found ${Object.keys(declared).length} declared flags and ${used.size} flag usages in ${files.length} files`)
 
-        // Extract declared flag names
-        declaredFlags = Object.keys(config)
-      }
-    }
-    catch (error) {
-      errors.push({
-        flag: 'config',
-        error: `Failed to load configuration: ${error}`,
-        type: 'config',
-      })
-    }
-  }
-  else {
-    errors.push({
-      flag: 'config',
-      error: `Configuration file not found: ${configPath}`,
-      type: 'config',
-    })
+  if (!errors.length) {
+    logger.success('Feature flag validation passed')
+    return errors
   }
 
-  // Scan source files for flag usage
-  try {
-    const usedFlags = await scanSourceFiles(srcPatterns)
-
-    // Check for undeclared flags
-    const undeclaredErrors = checkUndeclaredFlags(declaredFlags, usedFlags)
-    errors.push(...undeclaredErrors)
-
-    // Log summary
-    logger.info(`Found ${declaredFlags.length} declared flags`)
-    logger.info(`Found ${usedFlags.length} unique flag usages in code`)
-
-    if (errors.length > 0) {
-      logger.error(`Found ${errors.length} validation errors:`)
-      for (const error of errors) {
-        logger.error(`  [${error.type}] ${error.flag}: ${error.error}`)
-      }
-
-      if (failOnErrors) {
-        throw new Error(`Feature flag validation failed with ${errors.length} errors`)
-      }
-    }
-    else {
-      logger.success('✅ Feature flag validation passed')
-    }
+  for (const error of errors) {
+    logger.error(`[${error.type}] ${error.flag}: ${error.error}`)
   }
-  catch (error) {
-    if (error instanceof Error && error.message.includes('validation failed')) {
-      throw error
-    }
 
-    logger.error('Failed to validate feature flags:', error)
-    errors.push({
-      flag: 'validation',
-      error: `Validation process failed: ${error}`,
-      type: 'config',
-    })
+  if (failOnErrors) {
+    throw new Error(`Feature flag validation failed with ${errors.length} error(s)`)
   }
 
   return errors
+}
+
+async function loadConfigFlags(path: string, errors: ValidationError[]): Promise<FlagsSchema> {
+  if (!existsSync(path)) {
+    errors.push({ flag: 'config', error: `Configuration file not found: ${path}`, type: 'config' })
+    return {}
+  }
+
+  try {
+    const jiti = createJiti(import.meta.url, {
+      moduleCache: false,
+      alias: {
+        '#feature-flags/handler': fileURLToPath(new URL('./runtime/server/handlers/feature-flags', import.meta.url)),
+      },
+    })
+    const config = await jiti.import<unknown>(path, { default: true })
+
+    // A function config runs per request at runtime; here it is called once, with an
+    // empty context, only to learn which flags it declares.
+    const flags = typeof config === 'function' ? await config({}) : config
+    if (!flags || typeof flags !== 'object' || Array.isArray(flags)) {
+      throw new TypeError('the default export must be a flags object or a function returning one')
+    }
+    return flags as FlagsSchema
+  }
+  catch (error) {
+    errors.push({ flag: 'config', error: `Failed to load configuration: ${error instanceof Error ? error.message : error}`, type: 'config' })
+    return {}
+  }
 }

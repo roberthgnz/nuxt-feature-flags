@@ -1,179 +1,106 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { H3Event } from 'h3'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { extractFlagUsage, validateFeatureFlags } from '../../src/build'
 
-describe('config file integration', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    vi.clearAllMocks()
+vi.mock('../../src/utils/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), success: vi.fn(), warn: vi.fn() },
+}))
+
+let projectDir: string | undefined
+
+function createProject(files: Record<string, string>) {
+  projectDir = mkdtempSync(join(tmpdir(), 'nuxt-feature-flags-'))
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(projectDir, path)), { recursive: true })
+    writeFileSync(join(projectDir, path), content)
+  }
+  return projectDir
+}
+
+afterEach(() => {
+  if (projectDir) rmSync(projectDir, { recursive: true, force: true })
+  projectDir = undefined
+})
+
+describe('extractFlagUsage', () => {
+  it('finds flags used through the helpers and the directive', () => {
+    const source = `
+      <div v-feature="'fromDirective'" />
+      <div v-feature='"directive:variant"' />
+      <div v-if="isEnabled('inTemplate') && ready" />
+      <script setup>
+        isEnabled("doubleQuoted")
+        getValue(\`templateLiteral\`)
+        getVariant('variantLookup')
+        isEnabled(dynamicName)
+      </script>
+    `
+    expect(extractFlagUsage(source).sort()).toEqual([
+      'directive:variant',
+      'doubleQuoted',
+      'fromDirective',
+      'inTemplate',
+      'templateLiteral',
+      'variantLookup',
+    ])
+  })
+})
+
+describe('validateFeatureFlags', () => {
+  it('passes for a valid config whose flags are all declared', async () => {
+    const cwd = createProject({
+      'feature-flags.config.ts': `export default { newDashboard: true, exp: { enabled: true, variants: [{ name: 'a', weight: 50 }, { name: 'b', weight: 50 }] } }`,
+      'pages/index.vue': `<template><div v-if="isEnabled('newDashboard')" v-feature="'exp:a'" /></template>`,
+    })
+
+    expect(await validateFeatureFlags({ cwd })).toEqual([])
   })
 
-  describe('server runtime', () => {
-    it('reads flags from runtime config public.featureFlags.flags', async () => {
-      vi.doMock('#imports', () => ({
-        useRuntimeConfig: () => ({
-          public: {
-            featureFlags: {
-              flags: {
-                featureA: true,
-                featureB: {
-                  enabled: true,
-                  value: 'B',
-                },
-              },
-            },
-          },
-        }),
-      }))
-
-      vi.doMock('#feature-flags/config', () => ({
-        default: {},
-      }))
-
-      const { getFeatureFlags } = await import('../../src/runtime/server/utils/feature-flags')
-
-      const event = {
-        node: {
-          req: {
-            headers: {},
-            socket: { remoteAddress: '127.0.0.1' },
-          },
-        },
-        context: {},
-      } as H3Event
-
-      const result = await getFeatureFlags(event)
-
-      expect(result.flags.featureA).toBeDefined()
-      expect(result.flags.featureA.enabled).toBe(true)
-      expect(result.flags.featureB.value).toBe('B')
+  it('reads the flags declared by a function config through `#feature-flags/handler`', async () => {
+    const cwd = createProject({
+      'feature-flags.config.ts': [
+        `import { defineFeatureFlags } from '#feature-flags/handler'`,
+        `export default defineFeatureFlags(async context => ({ isAdmin: context.user?.role === 'admin' }))`,
+      ].join('\n'),
+      'app.vue': `<template><p v-if="isEnabled('isAdmin')" /></template>`,
     })
 
-    it('returns empty object when no flags are configured', async () => {
-      vi.doMock('#imports', () => ({
-        useRuntimeConfig: () => ({
-          public: {
-            featureFlags: {
-              flags: {},
-            },
-          },
-        }),
-      }))
-
-      vi.doMock('#feature-flags/config', () => ({
-        default: {},
-      }))
-
-      const { getFeatureFlags } = await import('../../src/runtime/server/utils/feature-flags')
-
-      const result = await getFeatureFlags({
-        node: {
-          req: {
-            headers: {},
-            socket: { remoteAddress: '127.0.0.1' },
-          },
-        },
-        context: {},
-      } as H3Event)
-
-      expect(result.flags).toEqual({})
-    })
-
-    it('resolves a variant when variant definitions are present', async () => {
-      vi.doMock('#imports', () => ({
-        useRuntimeConfig: () => ({
-          public: {
-            featureFlags: {
-              flags: {
-                abTest: {
-                  enabled: true,
-                  value: 'default',
-                  variants: [
-                    { name: 'control', weight: 50, value: 'A' },
-                    { name: 'treatment', weight: 50, value: 'B' },
-                  ],
-                },
-              },
-            },
-          },
-        }),
-      }))
-
-      vi.doMock('#feature-flags/config', () => ({
-        default: {},
-      }))
-
-      const { getFeatureFlags } = await import('../../src/runtime/server/utils/feature-flags')
-
-      const result = await getFeatureFlags({
-        node: {
-          req: {
-            headers: {},
-            socket: { remoteAddress: '127.0.0.1' },
-          },
-        },
-        context: { user: { id: 'user-123' } },
-      } as H3Event)
-
-      expect(result.flags.abTest).toBeDefined()
-      expect(['control', 'treatment']).toContain(result.flags.abTest.variant)
-      expect(['A', 'B']).toContain(result.flags.abTest.value)
-    })
+    expect(await validateFeatureFlags({ cwd })).toEqual([])
   })
 
-  describe('client composables', () => {
-    it('useAsyncFeatureFlags exposes fetched state', async () => {
-      const mockFlags = {
-        featureA: { enabled: true, value: true },
-      }
-
-      vi.doMock('#imports', () => ({
-        useNuxtApp: () => ({
-          $featureFlags: {},
-        }),
-        useState: (_key: string, init: () => unknown) => ({
-          value: init(),
-        }),
-        useFetch: () => ({
-          data: { value: mockFlags },
-          pending: { value: false },
-          error: { value: null },
-          refresh: vi.fn().mockResolvedValue(undefined),
-        }),
-      }))
-
-      const { useAsyncFeatureFlags } = await import('../../src/runtime/app/composables/use-async-feature-flags')
-
-      const { flags, pending, error } = useAsyncFeatureFlags()
-
-      expect(flags.value).toEqual(mockFlags)
-      expect(pending.value).toBe(false)
-      expect(error.value).toBe(null)
+  it('reports undeclared flags, invalid definitions and counts inline flags as declared', async () => {
+    const cwd = createProject({
+      'feature-flags.config.ts': `export default { exp: { enabled: true, variants: [{ name: 'a', weight: 80 }, { name: 'b', weight: 80 }] } }`,
+      'app.vue': `<template><p v-if="isEnabled('typo')" /><p v-if="isEnabled('inline')" /></template>`,
     })
 
-    it('useFeatureFlags exposes utility methods over $featureFlags', async () => {
-      vi.doMock('#imports', () => ({
-        useNuxtApp: () => ({
-          $featureFlags: {
-            enabledFlag: { enabled: true, value: true },
-            disabledFlag: { enabled: false, value: false },
-            variantFlag: { enabled: true, variant: 'variantA', value: 'A' },
-          },
-        }),
-      }))
+    const errors = await validateFeatureFlags({ cwd, flags: { inline: true } })
 
-      const { useFeatureFlags } = await import('../../src/runtime/app/composables/feature-flags')
+    expect(errors).toEqual([
+      expect.objectContaining({ flag: 'exp', error: expect.stringContaining('exceed 100%') }),
+      expect.objectContaining({ flag: 'typo', error: expect.stringContaining('not declared') }),
+    ])
+  })
 
-      const { isEnabled, getVariant, getValue } = useFeatureFlags()
+  it('reports a missing or broken config file', async () => {
+    const cwd = createProject({ 'broken.config.ts': `export default 42` })
 
-      expect(isEnabled('enabledFlag')).toBe(true)
-      expect(isEnabled('disabledFlag')).toBe(false)
-      expect(isEnabled('missingFlag')).toBe(false)
+    expect(await validateFeatureFlags({ cwd, configPath: 'missing.config.ts' })).toEqual([
+      expect.objectContaining({ flag: 'config', error: expect.stringContaining('not found') }),
+    ])
+    expect(await validateFeatureFlags({ cwd, configPath: 'broken.config.ts' })).toEqual([
+      expect.objectContaining({ flag: 'config', error: expect.stringContaining('default export') }),
+    ])
+  })
 
-      expect(getVariant('variantFlag')).toBe('variantA')
-      expect(getVariant('enabledFlag')).toBeUndefined()
-
-      expect(getValue('enabledFlag')).toBe(true)
-      expect(getValue('variantFlag')).toBe('A')
+  it('throws with failOnErrors, for CI', async () => {
+    const cwd = createProject({
+      'feature-flags.config.ts': `export default {}`,
+      'app.vue': `<template><p v-if="isEnabled('undeclared')" /></template>`,
     })
+
+    await expect(validateFeatureFlags({ cwd, failOnErrors: true })).rejects.toThrow('1 error')
   })
 })

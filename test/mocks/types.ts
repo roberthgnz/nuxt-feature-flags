@@ -1,14 +1,3 @@
-// Mock types for testing
-export interface FlagsSchema {
-  [key: string]: unknown
-}
-
-export interface ResolvedFlag {
-  enabled: boolean
-  value?: boolean | number | string | null
-  variant?: string
-}
-
-export interface ResolvedFlags {
-  [key: string]: ResolvedFlag
-}
+// Stand-in for the types generated into .nuxt at build time.
+export type FlagName = string
+export type { FlagValue, FlagsSchema, ResolvedFlag, ResolvedFlags } from '../../src/runtime/types'

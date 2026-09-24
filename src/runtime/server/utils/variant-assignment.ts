@@ -1,87 +1,60 @@
 import { createHash } from 'node:crypto'
-import type { FlagVariant, VariantContext } from '../../types/feature-flags'
+import type { FlagVariant } from '../../types'
+
+/** Who the visitor is, for sticky bucketing. The first available field wins. */
+export interface VariantContext {
+  userId?: string
+  sessionId?: string
+  ipAddress?: string
+}
 
 export interface NormalizedVariant extends FlagVariant {
   cumulativeWeight: number
 }
 
 /**
- * Normalize variant weights to sum to 100 and add cumulative weights
+ * Scale weights so they add up to 100 and attach the cumulative weight of each bucket.
+ * Negative or non-numeric weights count as 0; if every weight is 0, traffic is split evenly.
  */
 export function normalizeWeights(variants: FlagVariant[]): NormalizedVariant[] {
-  if (!variants.length) return []
-
-  const totalWeight = variants.reduce((sum, variant) => sum + variant.weight, 0)
-
-  // If total weight is 0, distribute equally
-  if (totalWeight === 0) {
-    const equalWeight = 100 / variants.length
-    let cumulative = 0
-    return variants.map((variant) => {
-      cumulative += equalWeight
-      return {
-        ...variant,
-        weight: equalWeight,
-        cumulativeWeight: cumulative,
-      }
-    })
+  if (!variants.length) {
+    return []
   }
 
-  // Normalize to 100 and calculate cumulative weights
+  const weights = variants.map(variant => (Number.isFinite(variant.weight) && variant.weight > 0 ? variant.weight : 0))
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
+
   let cumulative = 0
-  return variants.map((variant) => {
-    const normalizedWeight = (variant.weight / totalWeight) * 100
-    cumulative += normalizedWeight
-    return {
-      ...variant,
-      weight: normalizedWeight,
-      cumulativeWeight: cumulative,
-    }
+  return variants.map((variant, index) => {
+    const weight = totalWeight === 0 ? 100 / variants.length : (weights[index]! / totalWeight) * 100
+    cumulative += weight
+    return { ...variant, weight, cumulativeWeight: cumulative }
   })
 }
 
 /**
- * Generate a stable hash for consistent variant assignment
+ * Deterministic bucket in [0, 100) for this visitor and flag. Hashing the flag name
+ * too means a visitor's bucket in one experiment says nothing about another.
  */
 export function generateVariantHash(flagName: string, context: VariantContext): number {
   const identifier = context.userId || context.sessionId || context.ipAddress || 'anonymous'
-  const input = `${flagName}:${identifier}`
-  const hash = createHash('sha256').update(input).digest('hex')
-
-  // Convert first 8 characters of hex to number and normalize to 0-100
-  const hashInt = Number.parseInt(hash.substring(0, 8), 16)
-  return hashInt % 100
+  const hash = createHash('sha256').update(`${flagName}:${identifier}`).digest('hex')
+  return Number.parseInt(hash.substring(0, 8), 16) % 100
 }
 
-/**
- * Assign a variant based on distribution weights
- */
 export function assignVariant(variants: FlagVariant[], hash: number): FlagVariant | null {
-  if (!Array.isArray(variants) || !variants.length) return null
-
-  const normalizedVariants = normalizeWeights(variants)
-
-  // Find the variant based on cumulative weights
-  for (const variant of normalizedVariants) {
-    if (hash < variant.cumulativeWeight) {
-      return variant
-    }
+  if (!Array.isArray(variants) || !variants.length) {
+    return null
   }
 
-  // Fallback to last variant (should not happen with proper weights)
-  return normalizedVariants[normalizedVariants.length - 1]
+  const normalized = normalizeWeights(variants)
+  return normalized.find(variant => hash < variant.cumulativeWeight) ?? normalized[normalized.length - 1]!
 }
 
-/**
- * Get the assigned variant for a flag
- */
-export function getVariantForFlag(
-  flagName: string,
-  variants: FlagVariant[],
-  context: VariantContext,
-): FlagVariant | null {
-  if (!variants.length) return null
+export function getVariantForFlag(flagName: string, variants: FlagVariant[], context: VariantContext): FlagVariant | null {
+  if (!variants.length) {
+    return null
+  }
 
-  const hash = generateVariantHash(flagName, context)
-  return assignVariant(variants, hash)
+  return assignVariant(variants, generateVariantHash(flagName, context))
 }

@@ -7,16 +7,16 @@
 
 # Nuxt Feature Flags
 
-Type-safe feature flags for Nuxt 3 and Nuxt 4, with server-side runtime evaluation and built-in A/B testing.
+Type-safe feature flags for Nuxt 3 and Nuxt 4, evaluated on the server per request, with built-in A/B/n testing.
 
 ## Highlights
 
-- Works with Nuxt 3.1+ and Nuxt 4 (same module, no separate build).
-- Flags defined inline in `nuxt.config.ts`, or in a separate config file — sync or async, plain object or a function evaluated per-request.
-- Deterministic, sticky A/B/n variant assignment (hashed by user id, session cookie, or IP — no external service needed), computed fresh per visitor on every request.
-- SSR-safe: flags are resolved once per request on the server, then reused on the client without a second computation.
-- Works across SSR, SPA, and static generation — see [Rendering modes](#rendering-modes) for per-mode support and caveats.
-- Auto-imported composables, a `v-feature` directive, and a server-side helper.
+- Flags declared inline in `nuxt.config.ts` or in a config file — a plain object, or a (sync or async) function of the request context.
+- **Typed flag names**: `isEnabled('newDashbaord')` is a type error. Names are inferred from your config file and inline flags.
+- Sticky A/B/n variants (hashed by user id, session cookie or IP — no external service), checked with `isEnabled('experiment:variant')`.
+- Resolved once per request on the server and hydrated on the client: no extra request, no flash.
+- Only each visitor's *resolved* flags reach the browser — never the definitions (weights, disabled flags...).
+- `useFeatureFlags()`, `useAsyncFeatureFlags()`, a `v-feature` directive and a `getFeatureFlags(event)` server util, all auto-imported.
 
 ## Installation
 
@@ -26,9 +26,29 @@ npx nuxi module add nuxt-feature-flags
 
 ## Quick Start
 
-### 1. Enable the module
+### 1. Declare your flags
 
-Either point it at a config file:
+Inline in `nuxt.config.ts`:
+
+```ts
+export default defineNuxtConfig({
+  modules: ['nuxt-feature-flags'],
+  featureFlags: {
+    flags: {
+      newDashboard: true,
+      checkoutExperiment: {
+        enabled: true,
+        variants: [
+          { name: 'control', weight: 50, value: 'control' },
+          { name: 'treatment', weight: 50, value: 'treatment' },
+        ],
+      },
+    },
+  },
+})
+```
+
+...or in a config file, which can also compute flags from the request:
 
 ```ts
 // nuxt.config.ts
@@ -40,168 +60,166 @@ export default defineNuxtConfig({
 })
 ```
 
-...or declare flags inline, with no config file at all:
-
-```ts
-// nuxt.config.ts
-export default defineNuxtConfig({
-  modules: ['nuxt-feature-flags'],
-  featureFlags: {
-    flags: {
-      newDashboard: true,
-      checkoutExperiment: {
-        enabled: true,
-        value: 'control',
-        variants: [
-          { name: 'control', weight: 50, value: 'control' },
-          { name: 'treatment', weight: 50, value: 'treatment' },
-        ],
-      },
-    },
-  },
-})
-```
-
-### 2. Define flags in a config file (optional)
-
 ```ts
 // feature-flags.config.ts
 import { defineFeatureFlags } from '#feature-flags/handler'
 
-export default defineFeatureFlags((context) => {
-  return {
-    // `context` is the request's H3Event context — whatever your server
-    // middleware attaches to it (auth user, tenant, headers, KV bindings...).
-    isAdmin: context?.user?.role === 'admin',
-    newDashboard: true,
-
-    checkoutExperiment: {
-      enabled: true,
-      value: 'control',
-      variants: [
-        { name: 'control', weight: 50, value: 'control' },
-        { name: 'treatment', weight: 50, value: 'treatment' },
-      ],
-    },
-  }
-})
+export default defineFeatureFlags(async context => ({
+  // `context` is the request's `event.context`: whatever your server middleware
+  // attached to it (auth user, tenant, Cloudflare bindings...).
+  isAdmin: context.user?.role === 'admin',
+  newDashboard: true,
+  remoteFlag: await $fetch<boolean>('https://flags.example.com/remote-flag'),
+}))
 ```
 
-A function-shaped config is **evaluated on the server for every request** (subject to `cacheTTL`), with the real `H3Event` context — it is never invoked at build time. This makes it safe to read cookies, headers, auth state, or bindings only available at request time (e.g. Cloudflare KV). Async functions are also supported — `await` a remote source and return the flags.
+A function config is **evaluated on the server for every request** (see [`cacheTTL`](#caching) to share results), inside Nitro, so it can use anything available there (`useStorage`, `useRuntimeConfig`, bindings...). It never runs at build time. If it throws, the page still renders: flags fall back to the cached result (when `cacheTTL` is set) or to the inline flags, and the error is logged.
 
-### 3. Use flags on the client
+If a flag is declared both inline and in the config file, the config file wins.
+
+### 2. Use them in components
 
 ```vue
 <script setup lang="ts">
-const { flags, isEnabled, getValue, getVariant } = useFeatureFlags()
-const { flags: asyncFlags, pending, error, refresh } = useAsyncFeatureFlags()
+const { isEnabled, getValue, getVariant } = useFeatureFlags()
 </script>
 
 <template>
   <NewDashboard v-if="isEnabled('newDashboard')" />
-  <div v-feature="'newDashboard'">
-    Also hidden/removed from the DOM when the flag is off.
-  </div>
 
-  <div v-if="pending">Loading flags...</div>
-  <div v-else-if="error">Could not refresh flags</div>
-  <CheckoutV2 v-else-if="asyncFlags.checkoutExperiment?.enabled" />
+  <CheckoutV2 v-if="isEnabled('checkoutExperiment:treatment')" />
+  <CheckoutV1 v-else />
+
+  <p>Variant: {{ getVariant('checkoutExperiment') }} ({{ getValue('checkoutExperiment') }})</p>
 </template>
 ```
 
-- `useFeatureFlags()` reads the flags already resolved during SSR (no extra request).
-- `useAsyncFeatureFlags()` additionally re-fetches from the server on demand via `refresh()`.
-
-### 4. Use flags on the server
+### 3. Use them on the server
 
 ```ts
-// server/api/data.ts
-// `getFeatureFlags` is auto-imported in server/ code — no import needed.
+// server/api/dashboard.ts — `getFeatureFlags` is auto-imported in server/
 export default defineEventHandler(async (event) => {
   const { isEnabled, getVariant } = await getFeatureFlags(event)
 
   if (!isEnabled('newDashboard')) {
-    throw createError({ statusCode: 404, statusMessage: 'Feature disabled' })
+    throw createError({ statusCode: 404 })
   }
 
-  return {
-    variant: getVariant('checkoutExperiment'),
-  }
+  return { variant: getVariant('checkoutExperiment') }
 })
 ```
 
-Outside of `server/` auto-imports (e.g. a Nuxt plugin), import it explicitly:
+Flags are evaluated once per request: the page render, your API routes and middleware share the same result. Set `event.context.user` in a server middleware *before* reading flags so the config function and variant assignment can use it.
+
+## Flag definitions
+
+| Definition | Resolves to |
+|---|---|
+| `true` / `'blue'` / `42` | enabled when truthy, with that value |
+| `{ enabled: false, value }` | disabled, never assigned a variant |
+| `{ enabled: true, value }` | enabled, with `value` |
+| `{ value }` (no `enabled`) | enabled when `value` is truthy |
+| `{ enabled: true, variants }` | enabled, value of the visitor's variant (or the flag's `value` if the variant has none). A variant with `value: false` turns the flag off for its visitors — handy for gradual rollouts |
+
+## Variants (A/B/n testing)
+
+Each visitor is bucketed by hashing `flagName + identifier`, where the identifier is the first available of `event.context.user.id` (or `event.context.userId`), a session cookie (`session_id`, `session-id`, `nuxt-session`), or the client IP. The same visitor always gets the same variant of a flag, and buckets of different flags are independent. Weights are normalized, so they don't need to add up to 100.
 
 ```ts
-import { getFeatureFlags } from '#feature-flags/server/utils'
-```
+const { isEnabled, getVariant } = useFeatureFlags()
 
-## How variants are assigned
-
-For a flag with `variants`, each request is bucketed deterministically: the module hashes `flagName + identifier` (SHA-256), where `identifier` is the first available of `event.context.user.id`, a session cookie (`session_id` / `session-id` / `nuxt-session`), or the request IP. The same visitor always gets the same variant for a given flag, without any external experimentation service.
-
-## Rendering modes
-
-| Mode | Status | Notes |
-|---|---|---|
-| **SSR** (`ssr: true`, default) | ✅ Works | Flags resolved per request on the server with the real `H3Event` context, then hydrated on the client. |
-| **SPA** (`ssr: false`, deployed with a live Nitro server) | ✅ Works | The `.server` plugin correctly no-ops (no SSR render happens in this mode); the client fetches flags from `/api/_feature-flags/feature-flags` on mount instead. |
-| **SPA on fully static hosting** (`ssr: false`, no server function at all — e.g. GitHub Pages) | ⚠️ Not supported | The flags API route needs a live server. With no server in the output, that request 404s and flags stay unresolved. |
-| **Static generation** (`nuxi generate`) | ⚠️ Works, with a caveat | Flags (including A/B variants) are computed **once at build time** and baked into the prerendered HTML for every visitor. There's no live request to differentiate visitors, so this is fine for static config-style flags, but it is not real per-visitor A/B testing — everyone who loads a given static build gets the same variant. |
-| **Hybrid rendering** (`routeRules` with `isr`/`swr`/`prerender`) | ✅ Works | Routes that still render on the server go through the same code path as SSR. |
-
-### How server-side caching works
-
-`resolveFeatureFlags` caches the **flag definitions** returned by your config (the same for every visitor) for up to `cacheTTL` ms, so a request-heavy server doesn't re-run your config function (e.g. re-`$fetch` a remote source) on every single request. Per-visitor A/B variant assignment is a cheap deterministic hash and is **always recomputed fresh for every request** from that request's own context — it is never cached or reused across visitors, on any deployment target (Node, serverless, edge, warm or cold instances).
-
-## Configuration reference
-
-```ts
-// nuxt.config.ts
-export default defineNuxtConfig({
-  featureFlags: {
-    config: './feature-flags.config.ts', // path to a config file (optional)
-    flags: { /* inline flag definitions, merged with the config file */ },
-    cacheTTL: 5000, // ms the server caches flag definitions for (default: 1000) — see "How server-side caching works" above
-  },
-})
+isEnabled('checkoutExperiment')           // is the flag on for this visitor?
+isEnabled('checkoutExperiment:treatment') // is this visitor in the "treatment" variant?
+getVariant('checkoutExperiment')          // 'control' | 'treatment' | undefined
 ```
 
 ## API
 
-### Client
+### `useFeatureFlags()`
 
-- `useFeatureFlags()` — `{ flags, isEnabled(flag), getValue(flag), getVariant(flag) }`
-- `useAsyncFeatureFlags()` — `{ flags, pending, error, refresh() }`
+`{ flags, isEnabled(flag), getValue(flag), getVariant(flag) }` over the flags resolved on the server. Reactive: it updates when the flags are refreshed.
 
-### Server
+### `useAsyncFeatureFlags(options?)`
 
-- `await getFeatureFlags(event)` — `{ flags, isEnabled(flag), getValue(flag), getVariant(flag) }`
+Same helpers plus `{ flags, pending, error, refresh() }`. `refresh()` re-evaluates the flags on the server (e.g. after login) and updates every component using flags. By default it refreshes when the component mounts; pass `{ immediate: false }` to only refresh on demand.
 
-### Directive
+### `v-feature`
 
 ```vue
-<template>
-  <div v-feature="'myFlag'">Only when enabled</div>
-</template>
+<div v-feature="'newDashboard'">Only when enabled</div>
+<div v-feature="'checkoutExperiment:treatment'">Only in the treatment variant</div>
 ```
 
-`v-feature` removes the element from the DOM on mount if the flag is disabled. Because the removal happens client-side, the element is present in the initial server-rendered HTML and disappears right after hydration — prefer `isEnabled()` with `v-if` when that flash matters (e.g. above the fold).
+Works like `v-show`: the element is rendered with `display: none` when the flag is off — already in the server HTML, so there's no flash — and toggles when flags are refreshed. Use `v-if="isEnabled(...)"` to keep the markup out of the page entirely.
 
-## Migration Notes (v1 -> v2)
+### `getFeatureFlags(event)` (server)
 
-- Server resolution is async: `await getFeatureFlags(event)`.
-- Async config functions are supported.
-- `useAsyncFeatureFlags` is available for client refresh states.
-- `useFeatureFlags` reads already-resolved flags from Nuxt app context.
+`Promise<{ flags, isEnabled, getValue, getVariant }>`. Auto-imported in `server/`; elsewhere, `import { getFeatureFlags } from '#feature-flags/server/utils'`.
 
-## Testing
+### `GET /api/_feature-flags/feature-flags`
 
-Current branch status:
+The current visitor's resolved flags as JSON (sent with `cache-control: private, no-store`). Used by client-rendered pages and `refresh()`.
 
-- `npm run lint` passes.
-- `npm run test` passes (`213` tests).
-- `npx nuxt-module-build build` passes, and a full `nuxi build` against the built package succeeds (non-blocking builder warnings may appear).
+## Configuration
+
+```ts
+export default defineNuxtConfig({
+  featureFlags: {
+    config: './feature-flags.config.ts', // flags config file, relative to the project root (optional)
+    flags: {}, // inline flags (optional)
+    cacheTTL: 0, // ms a function config's result may be shared across requests (default 0)
+  },
+})
+```
+
+A `config` path that doesn't exist fails the build with a clear error instead of silently running without flags.
+
+Inline flags live in the server-only runtime config, so they can be overridden per environment without rebuilding, e.g. `NUXT_FEATURE_FLAGS_FLAGS_NEW_DASHBOARD=false`.
+
+### Caching
+
+By default a function config runs on every request, so it can safely depend on the visitor. If it doesn't (e.g. it only fetches flags from a remote service), set `cacheTTL` to reuse its result for that many milliseconds — **the cached result is shared by every visitor**, so don't combine `cacheTTL` with per-visitor logic. Concurrent requests during a cache miss share a single evaluation. Variant assignment is always computed per visitor, cache or not.
+
+## Type safety
+
+Flag names are generated into `.nuxt/types/nuxt-feature-flags.d.ts` from your inline flags and from the return type of your config file, so `isEnabled`, `getValue`, `getVariant` and `getFeatureFlags` only accept declared flags (plus `flag:variant` forms). If names can't be inferred (e.g. the config is typed as a generic record), any string is accepted.
+
+## Build-time validation
+
+`nuxt-feature-flags/build` checks the config (names, variant weights...) and that every flag used in your code (`isEnabled('x')`, `v-feature="'x'"`...) is declared. Handy in CI:
+
+```ts
+// scripts/validate-flags.ts
+import { validateFeatureFlags } from 'nuxt-feature-flags/build'
+
+await validateFeatureFlags({
+  configPath: 'feature-flags.config.ts',
+  srcPatterns: ['app/**/*.{vue,ts}', 'server/**/*.ts'],
+  failOnErrors: true,
+})
+```
+
+In development, invalid definitions are also reported in the server console.
+
+## Rendering modes
+
+| Mode | Support |
+|---|---|
+| **SSR** (default) | ✅ Flags resolved per request with the real request context, then hydrated. |
+| **SPA** (`ssr: false` or `routeRules: { ssr: false }`, with a server) | ✅ The client fetches the flags from the API route before rendering. |
+| **Hybrid** (`isr` / `swr` / `prerender` route rules) | ✅ Server-rendered routes behave like SSR. Remember that cached/prerendered HTML is shared, so its flags and variants are too. |
+| **Static generation** (`nuxi generate`) | ⚠️ Flags are computed once at build time and baked into the HTML: fine for static flags, but every visitor of a page gets the same variant. |
+| **Fully static hosting of an SPA** (no server at all) | ❌ The flags API route needs a server. |
+
+## Migrating from 2.0
+
+- `isEnabled('flag:variant')` now works everywhere (it always returned `false` before).
+- A function config is no longer cached for 1s by default — that cache shared one visitor's flags with others. Set `cacheTTL` explicitly if your config doesn't depend on the visitor.
+- Inline flags moved from `runtimeConfig.public.featureFlags` to the server-only `runtimeConfig.featureFlags` (env overrides: `NUXT_FEATURE_FLAGS_FLAGS_*` instead of `NUXT_PUBLIC_FEATURE_FLAGS_FLAGS_*`).
+- `v-feature` hides elements (like `v-show`) instead of removing them after hydration.
+- A missing `config` file now fails the build.
+- The undocumented `isFeatureEnabled` server helper was removed; use `await getFeatureFlags(event)`.
+- Server-rendered pages no longer fetch the flags again from the browser after hydration.
 
 ## Documentation
 

@@ -1,27 +1,12 @@
-import { useNuxtApp } from '#imports'
-import type { ResolvedFlags, FlagValue } from '#feature-flags/types'
+import type { FeatureFlagsHelpers } from '../../types'
+import { createFlagsHelpers } from '../../shared/helpers'
+import { useFeatureFlagsState } from '../utils/state'
+import type { FlagName } from '#feature-flags/types'
 
-export const useFeatureFlags = () => {
-  const { $featureFlags } = useNuxtApp()
-
-  const flags = $featureFlags as ResolvedFlags
-
-  const isEnabled = (flag: string): boolean => {
-    return flags[flag]?.enabled ?? false
-  }
-
-  const getValue = (flag: string): FlagValue => {
-    return flags[flag]?.value
-  }
-
-  const getVariant = (flag: string): string | undefined => {
-    return flags[flag]?.variant
-  }
-
-  return {
-    flags,
-    isEnabled,
-    getValue,
-    getVariant,
-  }
+/**
+ * Flags resolved for the current visitor. Reactive: templates and computeds using
+ * these helpers update when the flags are refreshed.
+ */
+export function useFeatureFlags(): FeatureFlagsHelpers<FlagName> {
+  return createFlagsHelpers<FlagName>(useFeatureFlagsState().value)
 }

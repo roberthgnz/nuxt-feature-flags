@@ -20,52 +20,60 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/types.d.ts",
-      "import": "./dist/module.mjs",
-      "require": "./dist/module.cjs"
+      "types": "./dist/types.d.mts",
+      "import": "./dist/module.mjs"
     },
     "./build": {
-      "types": "./dist/build.d.ts",
-      "import": "./dist/build.mjs",
-      "require": "./dist/build.cjs"
+      "types": "./dist/build.d.mts",
+      "import": "./dist/build.mjs"
     }
   },
-  "main": "./dist/module.cjs",
-  "types": "./dist/types.d.ts",
+  "main": "./dist/module.mjs",
+  "typesVersions": {
+    "*": {
+      ".": [
+        "./dist/types.d.mts"
+      ],
+      "build": [
+        "./dist/build.d.mts"
+      ]
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "prepare": "nuxi prepare",
+    "prepare": "nuxt-module-build prepare",
     "dev": "nuxi dev playground",
     "dev:build": "nuxi build playground",
     "dev:prepare": "nuxt-module-build build --stub && nuxt-module-build prepare && nuxi prepare playground",
-    "release": "npm run lint && npm run test && nuxt-module-build build && changelogen --release --patch --bump && npm publish && git push --follow-tags",
+    "release": "npm run lint && npm run test && npm run test:types && nuxt-module-build build && changelogen --release --patch --bump && npm publish && git push --follow-tags",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:types": "vue-tsc --noEmit && nuxi prepare test/fixtures/basic && vue-tsc --noEmit -p test/fixtures/basic"
   },
   "dependencies": {
     "@nuxt/kit": "^3.15.4",
-    "c12": "^2.0.1",
     "defu": "^6.1.4",
-    "jiti": "^2.4.2"
+    "glob": "^11.0.3",
+    "jiti": "^2.4.2",
+    "pathe": "^2.0.3"
   },
   "devDependencies": {
     "@nuxt/devtools": "^2.1.0",
     "@nuxt/eslint-config": "^1.1.0",
     "@nuxt/module-builder": "^1.0.1",
     "@nuxt/schema": "^3.15.4",
+    "@nuxt/test-utils": "^3.23.0",
     "@types/node": "latest",
     "@vitest/coverage-v8": "^2.1.8",
     "changelogen": "^0.5.7",
     "eslint": "^9.20.1",
-    "fast-check": "^4.3.0",
-    "glob": "^11.0.3",
     "h3": "^1.12.0",
     "nuxt": "^3.15.4",
-    "pathe": "^2.0.3",
+    "playwright-core": "~1.56.0",
     "typescript": "^5.8.3",
     "vitest": "^2.1.9",
     "vue-tsc": "^2.2.2"

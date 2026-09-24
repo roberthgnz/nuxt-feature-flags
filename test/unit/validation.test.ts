@@ -6,7 +6,7 @@ import {
   validateFlagDefinition,
   checkUndeclaredFlags,
 } from '../../src/runtime/server/utils/validation'
-import type { FlagVariant } from '../../src/types/feature-flags'
+import type { FlagVariant } from '../../src/runtime/types'
 
 describe('validation', () => {
   describe('validateFlagNaming', () => {
@@ -72,7 +72,7 @@ describe('validation', () => {
         { name: 'tooHigh', weight: 150 },
       ]
       const errors = validateVariants('testFlag', variants)
-      expect(errors).toHaveLength(3) // 2 weight range errors + 1 total weight error
+      expect(errors).toHaveLength(2) // out-of-range weights don't count towards the total
       expect(errors.some(e => e.error.includes('weight must be between 0 and 100'))).toBe(true)
     })
 
@@ -125,14 +125,14 @@ describe('validation', () => {
       expect(errors).toHaveLength(0)
     })
 
-    it('requires enabled property in flag config', () => {
-      const config = {
-        value: 'test',
-        variants: [],
-      }
-      const errors = validateFlagConfig('testFlag', config)
+    it('accepts a flag config without "enabled" (enabled when its value is truthy)', () => {
+      expect(validateFlagConfig('testFlag', { value: 'test', variants: [] })).toEqual([])
+    })
+
+    it('requires "enabled" to be a boolean when present', () => {
+      const errors = validateFlagConfig('testFlag', { enabled: 'yes' } as never)
       expect(errors).toHaveLength(1)
-      expect(errors[0].error).toContain('must have a boolean "enabled" property')
+      expect(errors[0].error).toContain('"enabled" must be a boolean')
     })
 
     it('validates variants in flag config', () => {
@@ -152,7 +152,7 @@ describe('validation', () => {
         enabled: true,
         variants: 'not-an-array',
       }
-      const errors = validateFlagConfig('testFlag', config)
+      const errors = validateFlagConfig('testFlag', config as never)
       expect(errors).toHaveLength(1)
       expect(errors[0].error).toContain('Variants must be an array')
     })
@@ -171,7 +171,7 @@ describe('validation', () => {
         anotherFlag: { enabled: true },
         invalidFlag: { enabled: 'not-boolean' },
       }
-      const errors = validateFlagDefinition(flags)
+      const errors = validateFlagDefinition(flags as never)
       expect(errors.length).toBeGreaterThan(0)
     })
 

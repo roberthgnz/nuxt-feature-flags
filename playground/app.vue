@@ -1,7 +1,6 @@
 <script setup lang="ts">
 const { isEnabled, flags, getVariant, getValue } = useFeatureFlags()
-
-console.log('All flags:', flags.value)
+const { pending, refresh } = useAsyncFeatureFlags({ immediate: false })
 </script>
 
 <template>
@@ -150,6 +149,13 @@ console.log('All flags:', flags.value)
       <h2 class="text-2xl font-semibold mb-4">
         Debug Information
       </h2>
+      <button
+        class="mb-4 px-4 py-2 border rounded"
+        :disabled="pending"
+        @click="refresh()"
+      >
+        {{ pending ? 'Refreshing…' : 'Refresh flags' }}
+      </button>
       <pre class="bg-gray-100 p-4 rounded text-sm overflow-auto">{{ JSON.stringify(flags, null, 2) }}</pre>
     </section>
   </div>

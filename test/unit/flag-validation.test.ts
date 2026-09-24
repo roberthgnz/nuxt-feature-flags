@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { FlagConfig } from '../../src/types/feature-flags'
+import type { FlagConfig } from '../../src/runtime/types'
 
 // Import validation functions
 const {
