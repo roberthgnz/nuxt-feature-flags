@@ -1,5 +1,34 @@
 # Changelog
 
+## v3.0.0
+
+[compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.5...v3.0.0)
+
+### 🩹 Fixes
+
+- ⚠️  Treat variant weights as percentages when they add up to less than 100 ([673afa1](https://github.com/rxb3rth/nuxt-feature-flags/commit/673afa1))
+
+### 💅 Refactors
+
+- ⚠️  Rework runtime, types and tests of the module ([93c6680](https://github.com/rxb3rth/nuxt-feature-flags/commit/93c6680))
+
+### 🏡 Chore
+
+- Ignore node compile cache ([920622c](https://github.com/rxb3rth/nuxt-feature-flags/commit/920622c))
+
+### ✅ Tests
+
+- Remove tests that never exercised the module, and legacy type shims ([6cac414](https://github.com/rxb3rth/nuxt-feature-flags/commit/6cac414))
+
+#### ⚠️ Breaking Changes
+
+- ⚠️  Treat variant weights as percentages when they add up to less than 100 ([673afa1](https://github.com/rxb3rth/nuxt-feature-flags/commit/673afa1))
+- ⚠️  Rework runtime, types and tests of the module ([93c6680](https://github.com/rxb3rth/nuxt-feature-flags/commit/93c6680))
+
+### ❤️ Contributors
+
+- Claude <noreply@anthropic.com>
+
 ## v2.0.5
 
 [compare changes](https://github.com/rxb3rth/nuxt-feature-flags/compare/v2.0.4...v2.0.5)
