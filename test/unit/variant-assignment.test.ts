@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { generateVariantHash, assignVariant, getVariantForFlag } from '../../src/runtime/server/utils/variant-assignment'
-import type { FlagVariant, VariantContext } from '../../src/types/feature-flags'
+import type { FlagVariant } from '../../src/runtime/types'
+import type { VariantContext } from '../../src/runtime/server/utils/variant-assignment'
 
 describe('variant-assignment', () => {
   describe('generateVariantHash', () => {

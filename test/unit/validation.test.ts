@@ -6,7 +6,7 @@ import {
   validateFlagDefinition,
   checkUndeclaredFlags,
 } from '../../src/runtime/server/utils/validation'
-import type { FlagVariant } from '../../src/types/feature-flags'
+import type { FlagVariant } from '../../src/runtime/types'
 
 describe('validation', () => {
   describe('validateFlagNaming', () => {

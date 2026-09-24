@@ -6,9 +6,6 @@ import { vi } from 'vitest'
 import type { FeatureFlagsConfigInput, FlagsSchema } from '../src/runtime/types'
 import { setRuntimeConfig } from './mocks/nuxt'
 
-/** @deprecated `#imports` is mocked globally in test/setup.ts. */
-export function setupMocks() {}
-
 export interface FakeRequest {
   context?: Record<string, unknown>
   headers?: Record<string, string>
