@@ -57,3 +57,6 @@ coverage
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Node compile cache
+node-compile-cache
