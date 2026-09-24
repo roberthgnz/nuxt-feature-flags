@@ -13,7 +13,10 @@ export interface NormalizedVariant extends FlagVariant {
 }
 
 /**
- * Scale weights so they add up to 100 and attach the cumulative weight of each bucket.
+ * Attach the cumulative weight of each bucket, in percent of traffic.
+ *
+ * Weights are percentages: when they add up to less than 100, the remaining visitors
+ * get no variant. Only weights adding up to more than 100 are scaled down to fit.
  * Negative or non-numeric weights count as 0; if every weight is 0, traffic is split evenly.
  */
 export function normalizeWeights(variants: FlagVariant[]): NormalizedVariant[] {
@@ -26,7 +29,9 @@ export function normalizeWeights(variants: FlagVariant[]): NormalizedVariant[] {
 
   let cumulative = 0
   return variants.map((variant, index) => {
-    const weight = totalWeight === 0 ? 100 / variants.length : (weights[index]! / totalWeight) * 100
+    const weight = totalWeight === 0
+      ? 100 / variants.length
+      : totalWeight > 100 ? (weights[index]! / totalWeight) * 100 : weights[index]!
     cumulative += weight
     return { ...variant, weight, cumulativeWeight: cumulative }
   })
@@ -42,13 +47,13 @@ export function generateVariantHash(flagName: string, context: VariantContext): 
   return Number.parseInt(hash.substring(0, 8), 16) % 100
 }
 
+/** The variant whose bucket contains `hash`, or `null` when it falls in the unassigned remainder. */
 export function assignVariant(variants: FlagVariant[], hash: number): FlagVariant | null {
   if (!Array.isArray(variants) || !variants.length) {
     return null
   }
 
-  const normalized = normalizeWeights(variants)
-  return normalized.find(variant => hash < variant.cumulativeWeight) ?? normalized[normalized.length - 1]!
+  return normalizeWeights(variants).find(variant => hash < variant.cumulativeWeight) ?? null
 }
 
 export function getVariantForFlag(flagName: string, variants: FlagVariant[], context: VariantContext): FlagVariant | null {

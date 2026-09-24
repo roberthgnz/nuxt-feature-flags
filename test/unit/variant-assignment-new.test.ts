@@ -28,7 +28,7 @@ describe('variant assignment', () => {
       ])
     })
 
-    it('should normalize weights that sum to less than 100', () => {
+    it('should keep weights that sum to less than 100, leaving the rest unassigned', () => {
       const variants: FlagVariant[] = [
         { name: 'control', weight: 30 },
         { name: 'treatment', weight: 20 },
@@ -37,8 +37,20 @@ describe('variant assignment', () => {
       const normalized = normalizeWeights(variants)
 
       expect(normalized).toEqual([
-        { name: 'control', weight: 60, cumulativeWeight: 60 },
-        { name: 'treatment', weight: 40, cumulativeWeight: 100 },
+        { name: 'control', weight: 30, cumulativeWeight: 30 },
+        { name: 'treatment', weight: 20, cumulativeWeight: 50 },
+      ])
+    })
+
+    it('should scale down weights that sum to more than 100', () => {
+      const variants: FlagVariant[] = [
+        { name: 'control', weight: 150 },
+        { name: 'treatment', weight: 50 },
+      ]
+
+      expect(normalizeWeights(variants)).toEqual([
+        { name: 'control', weight: 75, cumulativeWeight: 75 },
+        { name: 'treatment', weight: 25, cumulativeWeight: 100 },
       ])
     })
 

@@ -84,15 +84,17 @@ describe('variant-assignment', () => {
       expect(result2?.name).toBe('treatment')
     })
 
-    it('normalizes weights when they do not sum to 100', () => {
+    it('treats weights as percentages when they sum to less than 100', () => {
       const variants: FlagVariant[] = [
         { name: 'a', weight: 20 },
         { name: 'b', weight: 30 },
       ]
 
-      const result = assignVariant(variants, 30)
-      expect(result).not.toBeNull()
-      expect(['a', 'b']).toContain(result!.name)
+      expect(assignVariant(variants, 19)?.name).toBe('a')
+      expect(assignVariant(variants, 20)?.name).toBe('b')
+      expect(assignVariant(variants, 49)?.name).toBe('b')
+      expect(assignVariant(variants, 50)).toBeNull()
+      expect(assignVariant(variants, 99)).toBeNull()
     })
 
     it('handles edge case at weight boundaries', () => {
@@ -108,14 +110,13 @@ describe('variant-assignment', () => {
       expect(result2?.name).toBe('b')
     })
 
-    it('returns last variant as fallback', () => {
-      const variants: FlagVariant[] = [
-        { name: 'a', weight: 10 },
-        { name: 'b', weight: 10 },
-      ]
+    it('always assigns a variant when weights sum to 100 or more', () => {
+      const exact: FlagVariant[] = [{ name: 'a', weight: 60 }, { name: 'b', weight: 40 }]
+      const over: FlagVariant[] = [{ name: 'a', weight: 100 }, { name: 'b', weight: 100 }]
 
-      const result = assignVariant(variants, 99)
-      expect(result?.name).toBe('b')
+      expect(assignVariant(exact, 99)?.name).toBe('b')
+      expect(assignVariant(over, 49)?.name).toBe('a')
+      expect(assignVariant(over, 99)?.name).toBe('b')
     })
   })
 

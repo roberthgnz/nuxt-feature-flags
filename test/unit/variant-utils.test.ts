@@ -99,20 +99,15 @@ describe('variant assignment utilities', () => {
       expect(result?.name).toBe('zero2')
     })
 
-    it('should normalize weights when they do not sum to 100', () => {
-      const unnormalizedVariants: FlagVariant[] = [
+    it('should leave the remainder unassigned when weights sum to less than 100', () => {
+      const partialVariants: FlagVariant[] = [
         { name: 'a', weight: 20 },
         { name: 'b', weight: 30 },
-      ] // Total: 50, should normalize to 40/60
+      ] // Total: 50 -> a: [0, 20), b: [20, 50), nobody: [50, 100)
 
-      const lowHash = 20 // Should be 'a' in normalized distribution
-      const highHash = 60 // Should be 'b' in normalized distribution
-
-      const result1 = assignVariant(unnormalizedVariants, lowHash)
-      const result2 = assignVariant(unnormalizedVariants, highHash)
-
-      expect(result1?.name).toBe('a')
-      expect(result2?.name).toBe('b')
+      expect(assignVariant(partialVariants, 10)?.name).toBe('a')
+      expect(assignVariant(partialVariants, 30)?.name).toBe('b')
+      expect(assignVariant(partialVariants, 60)).toBeNull()
     })
 
     it('should return variant with value when specified', () => {

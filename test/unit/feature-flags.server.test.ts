@@ -46,6 +46,20 @@ describe('resolveFlag', () => {
     expect(withoutValue).toEqual({ enabled: true, value: 'blue', variant: 'only' })
   })
 
+  it('gives visitors outside every variant the flag\'s own value (gradual rollout)', async () => {
+    const { resolveFlag } = await loadServerUtils({})
+    const rollout = { enabled: true, value: false, variants: [{ name: 'new', weight: 20, value: true }] }
+
+    const visitors = Array.from({ length: 1000 }, (_, i) => resolveFlag('rollout', rollout, { userId: `user-${i}` }))
+    const inRollout = visitors.filter(flag => flag.variant === 'new')
+
+    expect(inRollout.every(flag => flag.enabled && flag.value === true)).toBe(true)
+    expect(visitors.filter(flag => !flag.variant).every(flag => !flag.enabled && flag.value === false)).toBe(true)
+    // ~20% of visitors, not 100%.
+    expect(inRollout.length).toBeGreaterThan(150)
+    expect(inRollout.length).toBeLessThan(250)
+  })
+
   it('turns the flag off for visitors whose variant value is `false` (gradual rollout)', async () => {
     const { resolveFlag } = await loadServerUtils({})
     const rollout = { enabled: true, variants: [{ name: 'old', weight: 100, value: false }] }
